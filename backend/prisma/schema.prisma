@@ -1,0 +1,158 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users & Auth ────────────────────────────────────────────────────────────
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String
+  isAdmin   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ─── Teams ───────────────────────────────────────────────────────────────────
+
+model Team {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  color     String?  // hex color for UI
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  people    Person[]
+}
+
+// ─── Roles (flexible/custom) ─────────────────────────────────────────────────
+
+model Role {
+  id        String   @id @default(uuid())
+  name      String   @unique  // e.g. "Developer", "Project Manager", "Designer"
+  shortName String?           // e.g. "DEV", "PM", "DES"
+  color     String?           // hex color for UI
+  createdAt DateTime @default(now())
+  people    Person[]
+}
+
+// ─── People ──────────────────────────────────────────────────────────────────
+
+model Person {
+  id              String   @id @default(uuid())
+  firstName       String
+  lastName        String
+  email           String?  @unique
+  roleId          String
+  role            Role     @relation(fields: [roleId], references: [id])
+  teamId          String?
+  team            Team?    @relation(fields: [teamId], references: [id])
+  
+  // Working hours (supports part-time)
+  hoursMonday     Float    @default(8.0)
+  hoursTuesday    Float    @default(8.0)
+  hoursWednesday  Float    @default(8.0)
+  hoursThursday   Float    @default(8.0)
+  hoursFriday     Float    @default(6.5)
+  
+  startDate       DateTime?  // when they joined
+  endDate         DateTime?  // if they left
+  isActive        Boolean  @default(true)
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  allocations     Allocation[]
+  absences        Absence[]
+}
+
+// ─── Projects ────────────────────────────────────────────────────────────────
+
+model Project {
+  id          String   @id @default(uuid())
+  name        String
+  code        String   @unique  // short code e.g. "PROJ-001"
+  color       String?  // hex color for UI
+  description String?
+  startDate   DateTime?
+  endDate     DateTime?
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  allocations Allocation[]
+}
+
+// ─── Allocations (person ↔ project, percentage-based) ────────────────────────
+
+model Allocation {
+  id         String   @id @default(uuid())
+  personId   String
+  person     Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+  projectId  String
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  // Percentage of available time allocated to this project
+  percentage Float    // 0-100, can exceed 100 if overallocated across projects
+  
+  // Date range for this allocation
+  startDate  DateTime
+  endDate    DateTime
+  
+  notes      String?
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([personId, startDate, endDate])
+  @@index([projectId, startDate, endDate])
+}
+
+// ─── Absence Types (custom) ─────────────────────────────────────────────────
+
+model AbsenceType {
+  id        String   @id @default(uuid())
+  name      String   @unique  // e.g. "Holiday", "Sick Leave", "Travelling"
+  color     String?  // hex color for UI
+  icon      String?  // icon identifier
+  isPaid    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  absences  Absence[]
+}
+
+// ─── Absences ────────────────────────────────────────────────────────────────
+
+model Absence {
+  id            String      @id @default(uuid())
+  personId      String
+  person        Person      @relation(fields: [personId], references: [id], onDelete: Cascade)
+  absenceTypeId String
+  absenceType   AbsenceType @relation(fields: [absenceTypeId], references: [id])
+  
+  startDate     DateTime
+  endDate       DateTime
+  isHalfDay     Boolean  @default(false)  // half-day absence
+  notes         String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([personId, startDate, endDate])
+}
+
+// ─── Public Holidays ─────────────────────────────────────────────────────────
+
+model PublicHoliday {
+  id        String   @id @default(uuid())
+  name      String
+  date      DateTime @unique
+  isHalfDay Boolean  @default(false)
+  
+  createdAt DateTime @default(now())
+}
