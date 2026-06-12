@@ -10,6 +10,8 @@ export default function ProjectsPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
   const [form, setForm] = useState({ name: '', code: '', color: '#3B82F6', description: '', startDate: '', endDate: '' });
+  const [logoFile, setLogoFile] = useState(null);
+  const [logoPreview, setLogoPreview] = useState(null);
 
   useEffect(() => { loadData(); }, []);
 
@@ -27,6 +29,8 @@ export default function ProjectsPage() {
   const openCreate = () => {
     setEditingProject(null);
     setForm({ name: '', code: '', color: '#3B82F6', description: '', startDate: '', endDate: '' });
+    setLogoFile(null);
+    setLogoPreview(null);
     setShowModal(true);
   };
 
@@ -40,22 +44,33 @@ export default function ProjectsPage() {
       startDate: project.startDate ? project.startDate.split('T')[0] : '',
       endDate: project.endDate ? project.endDate.split('T')[0] : '',
     });
+    setLogoFile(null);
+    setLogoPreview(project.logo ? `${import.meta.env.VITE_API_URL || ''}/uploads/logos/${project.logo}` : null);
     setShowModal(true);
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const data = {
-        ...form,
-        startDate: form.startDate ? new Date(form.startDate) : null,
-        endDate: form.endDate ? new Date(form.endDate) : null,
-      };
+      const formData = new FormData();
+      formData.append('name', form.name);
+      formData.append('code', form.code);
+      formData.append('color', form.color);
+      formData.append('description', form.description);
+      if (form.startDate) formData.append('startDate', form.startDate);
+      if (form.endDate) formData.append('endDate', form.endDate);
+      if (logoFile) formData.append('logo', logoFile);
+
       if (editingProject) {
-        await api.put(`/projects/${editingProject.id}`, data);
+        formData.append('isActive', editingProject.isActive);
+        await api.put(`/projects/${editingProject.id}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
         toast.success('Project updated');
       } else {
-        await api.post('/projects', data);
+        await api.post('/projects', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
         toast.success('Project created');
       }
       setShowModal(false);
@@ -78,7 +93,11 @@ export default function ProjectsPage() {
 
   const toggleActive = async (project) => {
     try {
-      await api.put(`/projects/${project.id}`, { isActive: !project.isActive });
+      const formData = new FormData();
+      formData.append('isActive', !project.isActive);
+      await api.put(`/projects/${project.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
       toast.success(project.isActive ? 'Project archived' : 'Project reactivated');
       loadData();
     } catch (err) {
@@ -99,15 +118,21 @@ export default function ProjectsPage() {
         {projects.map((project) => (
           <div key={project.id} className={`card ${!project.isActive ? 'opacity-60' : ''}`}>
             <div className="flex items-start justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: project.color }}></div>
+              <div className="flex items-start gap-3">
+                {project.logo ? (
+                  <img src={`${import.meta.env.VITE_API_URL || ''}/uploads/logos/${project.logo}`} alt="" className="w-8 h-8 rounded object-contain" />
+                ) : (
+                  <div className="w-8 h-8 rounded flex items-center justify-center text-white text-xs font-bold" style={{ backgroundColor: project.color }}>
+                    {project.code?.slice(0, 2)}
+                  </div>
+                )}
+                <div>
                   <Link to={`/projects/${project.id}`} className="font-semibold text-gray-900 hover:text-primary-600">
                     {project.name}
                   </Link>
+                  <p className="text-xs text-gray-500 mt-0.5">{project.code}</p>
+                  {project.description && <p className="text-sm text-gray-600 mt-1">{project.description}</p>}
                 </div>
-                <p className="text-xs text-gray-500 mt-1">{project.code}</p>
-                {project.description && <p className="text-sm text-gray-600 mt-2">{project.description}</p>}
               </div>
               {!project.isActive && <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded">Archived</span>}
             </div>
@@ -161,6 +186,35 @@ export default function ProjectsPage() {
               <label className="label">End Date</label>
               <input type="date" className="input" value={form.endDate} onChange={(e) => setForm(f => ({...f, endDate: e.target.value}))} />
             </div>
+          </div>
+
+          <div>
+            <label className="label">Logo</label>
+            <div className="flex items-center gap-4">
+              {logoPreview && (
+                <div className="relative">
+                  <img src={logoPreview} alt="Logo preview" className="w-12 h-12 rounded object-contain border" />
+                  <button
+                    type="button"
+                    onClick={() => { setLogoFile(null); setLogoPreview(null); }}
+                    className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white rounded-full text-xs flex items-center justify-center"
+                  >✕</button>
+                </div>
+              )}
+              <input
+                type="file"
+                accept=".png,.jpg,.jpeg,.svg,.webp"
+                className="text-sm text-gray-500 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary-50 file:text-primary-700 hover:file:bg-primary-100"
+                onChange={(e) => {
+                  const file = e.target.files[0];
+                  if (file) {
+                    setLogoFile(file);
+                    setLogoPreview(URL.createObjectURL(file));
+                  }
+                }}
+              />
+            </div>
+            <p className="text-xs text-gray-500 mt-1">PNG, JPG, SVG, or WebP. Max 2MB.</p>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">

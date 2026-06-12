@@ -79,6 +79,7 @@ model Project {
   name        String
   code        String   @unique  // short code e.g. "PROJ-001"
   color       String?  // hex color for UI
+  logo        String?  // filename of uploaded logo
   description String?
   startDate   DateTime?
   endDate     DateTime?
