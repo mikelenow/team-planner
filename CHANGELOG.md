@@ -10,6 +10,19 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Project logos**: Upload PNG/JPG/SVG/WebP logos (max 2MB) to projects, displayed in project cards and detail views
+- Logo preview in create/edit modal with remove button
+- Static file serving for uploaded logos (`/uploads/logos/`)
+- Persistent uploads volume in Docker
+
+### Fixed
+
+- Prisma binary target for Apple Silicon (linux-musl-arm64-openssl-3.0.x)
+- Removed obsolete `version` attribute from docker-compose.yml
+- Added OpenSSL to backend Alpine container
+
+### Added (initial scaffolding)
+
 - **Project scaffolding**: Full Docker Compose setup with PostgreSQL 16, Node.js backend, React frontend
 - **Database schema** (Prisma): Users, Teams, Roles, People, Projects, Allocations, Absences, AbsenceTypes, PublicHolidays
 - **Backend API routes**: Auth (login/register), People CRUD, Projects CRUD, Teams CRUD, Roles CRUD, Allocations CRUD, Absences CRUD, Holidays management, Utilization calculation, Export (CSV/XLSX)
