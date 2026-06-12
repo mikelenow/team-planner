@@ -1,4 +1,4 @@
-# 📊 Utilization Planner
+# 📊 Team Planner
 
 A resource utilization planning webapp for managing developer and project manager workloads, project allocations, absences, and Austrian public holidays.
 
@@ -61,7 +61,7 @@ docker compose exec backend npx prisma db seed
 ## Project Structure
 
 ```
-utilization-planner/
+team-planner/
 ├── docker-compose.yml
 ├── start.sh
 ├── backend/

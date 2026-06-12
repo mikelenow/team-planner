@@ -1,5 +1,5 @@
 {
-  "name": "utilization-planner-backend",
+  "name": "team-planner-backend",
   "version": "1.0.0",
   "description": "Resource Utilization Planner - Backend API",
   "main": "src/index.js",

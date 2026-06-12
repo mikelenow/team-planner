@@ -1,6 +1,6 @@
 # AGENTS.md
 
-## Project: Utilization Planner
+## Project: Team Planner
 
 Resource utilization planning webapp for developers, project managers, and other roles.
 
@@ -40,7 +40,7 @@ Every change to this project **must** be logged in `CHANGELOG.md` at the project
 ## Project Architecture
 
 ```
-utilization-planner/
+team-planner/
 ├── docker-compose.yml          # Full stack orchestration
 ├── .env                        # Environment variables (not committed)
 ├── backend/
