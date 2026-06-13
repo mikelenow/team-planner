@@ -10,6 +10,12 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Added
 
+- **Timeline inline editing**: Click any cell in the timeline to add/edit/delete allocations and absences
+  - Set project + percentage + date range per allocation
+  - Add multiple projects per person per day
+  - Quick absence entry (full/half day) from same modal
+  - Live total percentage counter with overallocation warning
+  - Visual hover indicator on clickable cells
 - **Project logos**: Upload PNG/JPG/SVG/WebP logos (max 2MB) to projects, displayed in project cards and detail views
 - Logo preview in create/edit modal with remove button
 - Static file serving for uploaded logos (`/uploads/logos/`)
