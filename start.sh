@@ -29,11 +29,11 @@ echo "⏳ Waiting for database to be ready..."
 sleep 5
 
 echo "🗃️  Running database migrations..."
-docker compose exec -T backend npx prisma migrate dev --name init 2>/dev/null || \
-docker compose exec -T backend npx prisma db push
+docker compose exec -T backend npx prisma db push 2>/dev/null
 
-echo "🌱 Seeding database..."
-docker compose exec -T backend npx prisma db seed
+# Only seed if database is empty (won't overwrite existing data)
+echo "🌱 Seeding database (if needed)..."
+docker compose exec -T backend npx prisma db seed 2>/dev/null || true
 
 echo ""
 echo "✅ Utilization Planner is running!"
