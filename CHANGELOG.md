@@ -15,19 +15,26 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - SSH via Cloudflare tunnel to production server
   - Production Docker Compose: postgres + backend + frontend (nginx static) + nginx reverse proxy
   - Optimized Dockerfiles (multi-stage frontend build, no devDeps in backend)
-  - deploy.sh: pull → build → migrate → health check → auto-rollback on failure
+  - deploy.sh: pull → build → migrate → seed → health check → auto-rollback on failure
   - deployment/README.md with setup instructions
+
+### Changed
+
+- Bumped all Dockerfiles from Node 20 to **Node 22** (matches local dev environment)
+- Updated npm packages: bcryptjs 2→3, dotenv 16→17, multer 1→2
+- Default role when adding a person is now **Developer**
+- Default team when adding a person is now **Development**
+- Seed: renamed "Engineering" team to "Development"
 
 ### Fixed
 
 - Empty email on people no longer causes unique constraint error (converts to null)
 - Safe `start.sh` — uses `prisma db push` without force-reset, won't wipe data
-
-### Changed
-
-- Default role when adding a person is now **Developer**
-- Default team when adding a person is now **Development**
-- Seed: renamed "Engineering" team to "Development"
+- Added x86_64 Prisma binary target for production server (`linux-musl-openssl-3.0.x`)
+- Health checks use `127.0.0.1` instead of `localhost` (Alpine IPv6 issue)
+- Added `package-lock.json` files (required for `npm ci` in production)
+- npm version mismatch: prod Dockerfiles now run `npm install -g npm@latest`
+- Deploy script seeds database after migration (ensures admin user exists)
 
 ---
 
