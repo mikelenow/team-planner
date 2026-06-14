@@ -67,6 +67,8 @@ if [ "$SKIP_MIGRATIONS" != "true" ]; then
   echo "Running database migrations..."
   $DC run --rm backend npx prisma db push --accept-data-loss=false
   echo "Migrations applied."
+  echo "Running seed (if needed)..."
+  $DC run --rm backend npx prisma db seed 2>/dev/null || true
 else
   echo "Skipping migrations (SKIP_MIGRATIONS=true)"
 fi
