@@ -29,8 +29,6 @@ Set these in the repo settings → Secrets and Variables → Actions:
 | `SSH_HOST` | `ssh.mrnow.at` |
 | `SSH_USER` | `antfarm` |
 | `DEPLOY_DIR` | `/home/antfarm/deployments/team-planner` |
-| `CF_ACCESS_CLIENT_ID` | Cloudflare Access service token ID |
-| `CF_ACCESS_CLIENT_SECRET` | Cloudflare Access service token secret |
 
 ## Cloudflare Tunnel
 

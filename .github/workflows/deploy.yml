@@ -2,12 +2,10 @@
 # Deploys to teamplanner.mrnow.at via Cloudflare tunnel on push to main.
 #
 # Required GitHub secrets:
-#   SSH_PRIVATE_KEY         — private key authorized on the target server
-#   SSH_HOST                — Cloudflare tunnel SSH hostname (e.g. ssh.mrnow.at)
-#   SSH_USER                — SSH username on the target server (e.g. antfarm)
-#   DEPLOY_DIR              — absolute path on the server (e.g. /home/antfarm/deployments/team-planner)
-#   CF_ACCESS_CLIENT_ID     — Cloudflare Access service token ID
-#   CF_ACCESS_CLIENT_SECRET — Cloudflare Access service token secret
+#   SSH_PRIVATE_KEY  — private key authorized on the target server
+#   SSH_HOST         — Cloudflare tunnel SSH hostname (e.g. ssh.mrnow.at)
+#   SSH_USER         — SSH username on the target server (e.g. antfarm)
+#   DEPLOY_DIR       — absolute path on the server (e.g. /home/antfarm/deployments/team-planner)
 
 name: Deploy
 
@@ -44,7 +42,7 @@ jobs:
             User ${{ secrets.SSH_USER }}
             IdentityFile ~/.ssh/deploy_key
             StrictHostKeyChecking no
-            ProxyCommand cloudflared access ssh --hostname %h --service-token-id ${{ secrets.CF_ACCESS_CLIENT_ID }} --service-token-secret ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+            ProxyCommand cloudflared access ssh --hostname %h
           EOF
           chmod 600 ~/.ssh/config
 
