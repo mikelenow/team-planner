@@ -6,6 +6,21 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## 2026-06-14
+
+### Fixed
+
+- Empty email on people no longer causes unique constraint error (converts to null)
+- Safe `start.sh` — uses `prisma db push` without force-reset, won't wipe data
+
+### Changed
+
+- Default role when adding a person is now **Developer**
+- Default team when adding a person is now **Development**
+- Seed: renamed "Engineering" team to "Development"
+
+---
+
 ## 2026-06-12
 
 ### Added
