@@ -49,8 +49,11 @@ router.get('/:id', async (req, res) => {
 // POST /api/people
 router.post('/', requireEditor, async (req, res) => {
   try {
+    const data = { ...req.body };
+    if (!data.email) data.email = null;
+    if (!data.teamId) data.teamId = null;
     const person = await prisma.person.create({
-      data: req.body,
+      data,
       include: { role: true, team: true },
     });
     res.status(201).json(person);
@@ -62,9 +65,12 @@ router.post('/', requireEditor, async (req, res) => {
 // PUT /api/people/:id
 router.put('/:id', requireEditor, async (req, res) => {
   try {
+    const data = { ...req.body };
+    if ('email' in data && !data.email) data.email = null;
+    if ('teamId' in data && !data.teamId) data.teamId = null;
     const person = await prisma.person.update({
       where: { id: req.params.id },
-      data: req.body,
+      data,
       include: { role: true, team: true },
     });
     res.json(person);
