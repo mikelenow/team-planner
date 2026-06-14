@@ -16,6 +16,17 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Quick absence entry (full/half day) from same modal
   - Live total percentage counter with overallocation warning
   - Visual hover indicator on clickable cells
+- **Week-level allocation editing**: "Week" column with ✏️ button per person
+  - Set project allocation percentages for entire week at once
+  - Quick presets (25/50/75/100%) for rapid entry
+  - Backend auto-upserts (creates or extends existing allocations)
+- **User management & role system**:
+  - Three roles: ADMIN (full access), MANAGER (edit), VIEWER (read-only)
+  - Users page (admin only) with create/edit/deactivate/delete
+  - Role-based access control on all write endpoints
+  - Viewers see timeline but cannot click to edit
+  - First registered user becomes ADMIN automatically
+  - Protection against removing last admin or self-deletion
 - **Project logos**: Upload PNG/JPG/SVG/WebP logos (max 2MB) to projects, displayed in project cards and detail views
 - Logo preview in create/edit modal with remove button
 - Static file serving for uploaded logos (`/uploads/logos/`)
