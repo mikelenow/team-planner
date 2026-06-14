@@ -8,6 +8,16 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## 2026-06-14
 
+### Added
+
+- **Production deployment pipeline** for teamplanner.mrnow.at
+  - GitHub Actions workflow: auto-deploys on push to main
+  - SSH via Cloudflare tunnel to production server
+  - Production Docker Compose: postgres + backend + frontend (nginx static) + nginx reverse proxy
+  - Optimized Dockerfiles (multi-stage frontend build, no devDeps in backend)
+  - deploy.sh: pull → build → migrate → health check → auto-rollback on failure
+  - deployment/README.md with setup instructions
+
 ### Fixed
 
 - Empty email on people no longer causes unique constraint error (converts to null)
