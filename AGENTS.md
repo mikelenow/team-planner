@@ -34,6 +34,7 @@ Every change to this project **must** be logged in `CHANGELOG.md` at the project
 - Use categories: Added, Changed, Fixed, Removed
 - Group by date (newest first)
 - Be specific about what changed and why
+- **Read CHANGELOG.md at the start of every session** to understand recent changes
 
 ---
 
