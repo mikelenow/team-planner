@@ -16,6 +16,13 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   - Quick absence entry (full/half day) from same modal
   - Live total percentage counter with overallocation warning
   - Visual hover indicator on clickable cells
+- **Capacity overview dashboard**: Complete resource spending & remaining overview
+  - Side-by-side **Week** and **Month** capacity cards
+  - Team utilization gauge (%) with color-coded thresholds
+  - Hours breakdown: Total Capacity | Allocated | Absences | Remaining
+  - Overallocation warning when team exceeds 100%
+  - Per-project hours breakdown with mini bar charts
+  - Per-person utilization with allocated/available hours display
 - **Week-level allocation editing**: "Week" column with ✏️ button per person
   - Set project allocation percentages for entire week at once
   - Quick presets (25/50/75/100%) for rapid entry
