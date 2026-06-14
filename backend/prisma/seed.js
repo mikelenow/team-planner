@@ -61,7 +61,7 @@ async function main() {
 
   // ─── Create default teams ─────────────────────────────────────────────────
   const teams = [
-    { name: 'Engineering', color: '#3B82F6' },
+    { name: 'Development', color: '#3B82F6' },
     { name: 'Product', color: '#10B981' },
     { name: 'Design', color: '#F59E0B' },
   ];

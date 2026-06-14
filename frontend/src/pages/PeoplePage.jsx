@@ -44,8 +44,10 @@ export default function PeoplePage() {
 
   const openCreate = () => {
     setEditingPerson(null);
+    const defaultRole = roles.find(r => r.name === 'Developer') || roles[0];
+    const defaultTeam = teams.find(t => t.name === 'Development');
     setForm({
-      firstName: '', lastName: '', email: '', roleId: roles[0]?.id || '', teamId: '',
+      firstName: '', lastName: '', email: '', roleId: defaultRole?.id || '', teamId: defaultTeam?.id || '',
       hoursMonday: 8, hoursTuesday: 8, hoursWednesday: 8, hoursThursday: 8, hoursFriday: 6.5,
     });
     setShowModal(true);
