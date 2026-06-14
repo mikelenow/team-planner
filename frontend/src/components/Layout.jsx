@@ -8,6 +8,7 @@ import {
   UserGroupIcon,
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
+  ShieldCheckIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -17,10 +18,11 @@ const navigation = [
   { name: 'Projects', href: '/projects', icon: FolderIcon },
   { name: 'Teams', href: '/teams', icon: UserGroupIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
+  { name: 'Users', href: '/users', icon: ShieldCheckIcon, adminOnly: true },
 ];
 
 export default function Layout() {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const navigate = useNavigate();
 
   const handleLogout = () => {
@@ -38,7 +40,9 @@ export default function Layout() {
         </div>
 
         <nav className="flex-1 px-3 space-y-1">
-          {navigation.map((item) => (
+          {navigation
+            .filter(item => !item.adminOnly || isAdmin)
+            .map((item) => (
             <NavLink
               key={item.name}
               to={item.href}

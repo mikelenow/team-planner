@@ -15,9 +15,16 @@ model User {
   email     String   @unique
   password  String
   name      String
-  isAdmin   Boolean  @default(false)
+  role      UserRole @default(VIEWER)
+  isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum UserRole {
+  ADMIN    // Full access: manage users, all CRUD
+  MANAGER  // Can edit allocations, people, projects, absences
+  VIEWER   // Read-only access to timeline and reports
 }
 
 // ─── Teams ───────────────────────────────────────────────────────────────────

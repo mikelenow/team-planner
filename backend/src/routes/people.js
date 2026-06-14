@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireEditor } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -47,7 +47,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // POST /api/people
-router.post('/', async (req, res) => {
+router.post('/', requireEditor, async (req, res) => {
   try {
     const person = await prisma.person.create({
       data: req.body,
@@ -60,7 +60,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/people/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireEditor, async (req, res) => {
   try {
     const person = await prisma.person.update({
       where: { id: req.params.id },
@@ -74,7 +74,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/people/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireEditor, async (req, res) => {
   try {
     await prisma.person.delete({ where: { id: req.params.id } });
     res.status(204).send();

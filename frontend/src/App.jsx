@@ -10,6 +10,7 @@ import ProjectDetail from './pages/ProjectDetail';
 import TimelinePage from './pages/TimelinePage';
 import TeamsPage from './pages/TeamsPage';
 import SettingsPage from './pages/SettingsPage';
+import UsersPage from './pages/UsersPage';
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth();
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="timeline" element={<TimelinePage />} />
         <Route path="teams" element={<TeamsPage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="users" element={<UsersPage />} />
       </Route>
     </Routes>
   );

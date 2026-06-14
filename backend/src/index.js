@@ -4,6 +4,7 @@ const cors = require('cors');
 const path = require('path');
 
 const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
 const peopleRoutes = require('./routes/people');
 const projectRoutes = require('./routes/projects');
 const allocationRoutes = require('./routes/allocations');
@@ -24,6 +25,7 @@ app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/people', peopleRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/allocations', allocationRoutes);

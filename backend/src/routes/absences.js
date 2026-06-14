@@ -1,6 +1,6 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireEditor } = require('../middleware/auth');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -40,7 +40,7 @@ router.get('/types', async (req, res) => {
 });
 
 // POST /api/absences/types
-router.post('/types', async (req, res) => {
+router.post('/types', requireEditor, async (req, res) => {
   try {
     const type = await prisma.absenceType.create({ data: req.body });
     res.status(201).json(type);
@@ -50,7 +50,7 @@ router.post('/types', async (req, res) => {
 });
 
 // POST /api/absences
-router.post('/', async (req, res) => {
+router.post('/', requireEditor, async (req, res) => {
   try {
     const { personId, absenceTypeId, startDate, endDate, isHalfDay, notes } = req.body;
     const absence = await prisma.absence.create({
@@ -71,7 +71,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/absences/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireEditor, async (req, res) => {
   try {
     const data = { ...req.body };
     if (data.startDate) data.startDate = new Date(data.startDate);
@@ -89,7 +89,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/absences/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireEditor, async (req, res) => {
   try {
     await prisma.absence.delete({ where: { id: req.params.id } });
     res.status(204).send();

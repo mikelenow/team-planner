@@ -1,11 +1,13 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
 import { format, addWeeks, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday } from 'date-fns';
 import { getUtilizationBgColor } from '../utils/helpers';
+import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
 
 export default function TimelinePage() {
+  const { isEditor } = useAuth();
   const [utilization, setUtilization] = useState([]);
   const [roles, setRoles] = useState([]);
   const [teams, setTeams] = useState([]);
@@ -17,10 +19,15 @@ export default function TimelinePage() {
   const [filters, setFilters] = useState({ roleId: '', teamId: '' });
 
   // Cell editing state
-  const [editingCell, setEditingCell] = useState(null); // { personId, date, allocations }
+  const [editingCell, setEditingCell] = useState(null);
   const [showCellModal, setShowCellModal] = useState(false);
-  const [cellAllocations, setCellAllocations] = useState([]); // [{projectId, percentage}]
+  const [cellAllocations, setCellAllocations] = useState([]);
   const [cellAbsence, setCellAbsence] = useState({ absenceTypeId: '', isHalfDay: false });
+
+  // Week editing state
+  const [showWeekModal, setShowWeekModal] = useState(false);
+  const [weekEditPerson, setWeekEditPerson] = useState(null);
+  const [weekAllocations, setWeekAllocations] = useState([]);
 
   useEffect(() => { loadRolesTeams(); }, []);
   useEffect(() => { loadUtilization(); }, [currentDate, viewMode, filters]);
@@ -115,10 +122,10 @@ export default function TimelinePage() {
   // ─── Cell click handler ────────────────────────────────────────────────────
 
   const handleCellClick = (personItem, dateStr) => {
+    if (!isEditor) return;
     const dayData = personItem.daily.find(d => d.date === dateStr);
     if (!dayData || dayData.weekend || dayData.holiday) return;
 
-    // Find active allocations for this person on this date
     const activeAllocations = personItem.allocations
       .filter(a => {
         const start = format(new Date(a.startDate), 'yyyy-MM-dd');
@@ -138,6 +145,62 @@ export default function TimelinePage() {
     setShowCellModal(true);
   };
 
+  // ─── Week edit handler ─────────────────────────────────────────────────────
+
+  const handleWeekEdit = (personItem) => {
+    if (!isEditor) return;
+    const { start, end } = getDateRange();
+    const weekStart = format(startOfWeek(start, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const weekEnd = format(endOfWeek(start, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+
+    // Collect unique projects allocated this week
+    const existingAllocations = personItem.allocations
+      .filter(a => {
+        const aStart = format(new Date(a.startDate), 'yyyy-MM-dd');
+        const aEnd = format(new Date(a.endDate), 'yyyy-MM-dd');
+        return aEnd >= weekStart && aStart <= weekEnd;
+      })
+      .map(a => ({ id: a.id, projectId: a.project.id, projectName: a.project.name, percentage: a.percentage }));
+
+    // Deduplicate by project
+    const uniqueMap = new Map();
+    existingAllocations.forEach(a => {
+      if (!uniqueMap.has(a.projectId) || uniqueMap.get(a.projectId).percentage < a.percentage) {
+        uniqueMap.set(a.projectId, a);
+      }
+    });
+
+    const allocations = Array.from(uniqueMap.values());
+
+    setWeekEditPerson({
+      id: personItem.person.id,
+      name: `${personItem.person.firstName} ${personItem.person.lastName}`,
+      weekStart,
+      weekEnd,
+    });
+    setWeekAllocations(allocations.length > 0 ? allocations : [{ id: null, projectId: '', percentage: 100 }]);
+    setShowWeekModal(true);
+  };
+
+  const handleSaveWeekAllocations = async () => {
+    try {
+      for (const alloc of weekAllocations) {
+        if (!alloc.projectId || !alloc.percentage) continue;
+        await api.post('/allocations/week', {
+          personId: weekEditPerson.id,
+          projectId: alloc.projectId,
+          percentage: parseFloat(alloc.percentage),
+          weekDate: weekEditPerson.weekStart,
+        });
+      }
+      toast.success('Week allocations saved');
+      setShowWeekModal(false);
+      loadUtilization();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save');
+    }
+  };
+
   // ─── Save allocations from cell modal ─────────────────────────────────────
 
   const handleSaveCellAllocations = async () => {
@@ -146,14 +209,12 @@ export default function TimelinePage() {
         if (!alloc.projectId || !alloc.percentage) continue;
 
         if (alloc.id) {
-          // Update existing allocation
           await api.put(`/allocations/${alloc.id}`, {
             percentage: parseFloat(alloc.percentage),
             startDate: alloc.startDate,
             endDate: alloc.endDate,
           });
         } else {
-          // Create new allocation
           await api.post('/allocations', {
             personId: editingCell.personId,
             projectId: alloc.projectId,
@@ -164,7 +225,6 @@ export default function TimelinePage() {
         }
       }
 
-      // Handle absence if set
       if (cellAbsence.absenceTypeId) {
         await api.post('/absences', {
           personId: editingCell.personId,
@@ -211,6 +271,7 @@ export default function TimelinePage() {
   const dayNames = ['', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', ''];
 
   const totalAllocationPct = cellAllocations.reduce((sum, a) => sum + (parseFloat(a.percentage) || 0), 0);
+  const weekTotalPct = weekAllocations.reduce((sum, a) => sum + (parseFloat(a.percentage) || 0), 0);
 
   return (
     <div>
@@ -264,7 +325,7 @@ export default function TimelinePage() {
         <span className="flex items-center gap-1"><span className="w-4 h-4 rounded" style={{ backgroundColor: '#fef3c7' }}></span> 81–100%</span>
         <span className="flex items-center gap-1"><span className="w-4 h-4 rounded" style={{ backgroundColor: '#fee2e2' }}></span> Over 100%</span>
         <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-gray-300"></span> Holiday/Absence</span>
-        <span className="text-gray-400 ml-2">💡 Click any cell to edit</span>
+        {isEditor && <span className="text-gray-400 ml-2">💡 Click any cell to edit • Use "Week" button for bulk</span>}
       </div>
 
       {loading ? (
@@ -277,6 +338,11 @@ export default function TimelinePage() {
                 <th className="sticky left-0 bg-gray-50 z-10 px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase border-b min-w-[200px]">
                   Person
                 </th>
+                {isEditor && (
+                  <th className="px-1 py-3 text-center text-xs font-medium text-gray-500 uppercase border-b min-w-[60px]">
+                    Week
+                  </th>
+                )}
                 {workDays.map((day) => (
                   <th
                     key={day.toISOString()}
@@ -298,6 +364,17 @@ export default function TimelinePage() {
                     <div className="font-medium text-sm text-gray-900">{item.person.firstName} {item.person.lastName}</div>
                     <div className="text-xs text-gray-500">{item.person.role?.shortName || item.person.role?.name}{item.person.team ? ` • ${item.person.team.name}` : ''}</div>
                   </td>
+                  {isEditor && (
+                    <td className="px-1 py-2 text-center">
+                      <button
+                        onClick={() => handleWeekEdit(item)}
+                        className="h-8 w-full flex items-center justify-center rounded bg-primary-50 text-primary-600 text-xs font-medium hover:bg-primary-100 transition-colors"
+                        title="Set allocation for entire week"
+                      >
+                        ✏️
+                      </button>
+                    </td>
+                  )}
                   {workDays.map((day) => {
                     const dateStr = format(day, 'yyyy-MM-dd');
                     const dayData = item.daily.find(d => d.date === dateStr);
@@ -318,7 +395,7 @@ export default function TimelinePage() {
                       return (
                         <td key={dateStr} className="px-1 py-2 text-center" title={dayData.absenceType}>
                           <div
-                            className="h-8 flex items-center justify-center rounded bg-gray-200 text-gray-600 text-xs cursor-pointer hover:ring-2 hover:ring-primary-300"
+                            className={`h-8 flex items-center justify-center rounded bg-gray-200 text-gray-600 text-xs ${isEditor ? 'cursor-pointer hover:ring-2 hover:ring-primary-300' : ''}`}
                             onClick={() => handleCellClick(item, dateStr)}
                           >
                             {dayData.absenceType.slice(0, 3)}
@@ -330,9 +407,9 @@ export default function TimelinePage() {
                     return (
                       <td key={dateStr} className={`px-1 py-2 text-center ${isToday(day) ? 'bg-primary-50/50' : ''}`}>
                         <div
-                          className="h-8 flex items-center justify-center rounded text-xs font-medium cursor-pointer hover:ring-2 hover:ring-primary-300 transition-shadow"
+                          className={`h-8 flex items-center justify-center rounded text-xs font-medium ${isEditor ? 'cursor-pointer hover:ring-2 hover:ring-primary-300 transition-shadow' : ''}`}
                           style={{ backgroundColor: getUtilizationBgColor(dayData.allocationPct) }}
-                          title={`${dayData.allocationPct}% allocated (${dayData.allocated}h / ${dayData.available}h available) — Click to edit`}
+                          title={`${dayData.allocationPct}% allocated (${dayData.allocated}h / ${dayData.available}h available)${isEditor ? ' — Click to edit' : ''}`}
                           onClick={() => handleCellClick(item, dateStr)}
                         >
                           {dayData.allocationPct > 0 ? `${dayData.allocationPct}%` : ''}
@@ -455,6 +532,90 @@ export default function TimelinePage() {
         <div className="flex justify-end gap-3 pt-4 border-t">
           <button onClick={() => setShowCellModal(false)} className="btn-secondary">Cancel</button>
           <button onClick={handleSaveCellAllocations} className="btn-primary">Save Changes</button>
+        </div>
+      </Modal>
+
+      {/* ─── Week Edit Modal ──────────────────────────────────────────────────── */}
+      <Modal isOpen={showWeekModal} onClose={() => setShowWeekModal(false)} title={`Week Allocation — ${weekEditPerson?.name}`} size="md">
+        <div className="mb-4">
+          <span className="text-sm text-gray-500">
+            📅 Week: {weekEditPerson?.weekStart} → {weekEditPerson?.weekEnd}
+          </span>
+          <p className="text-xs text-gray-400 mt-1">
+            Sets the allocation percentage for the entire week (Mon–Sun). Existing allocations for the same project in this period will be updated.
+          </p>
+        </div>
+
+        <div className="mb-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-medium text-sm text-gray-700">Projects</h3>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-medium px-2 py-0.5 rounded ${weekTotalPct > 100 ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600'}`}>
+                Total: {weekTotalPct}%{weekTotalPct > 100 && ' ⚠️'}
+              </span>
+              <button
+                onClick={() => setWeekAllocations(prev => [...prev, { id: null, projectId: '', percentage: 100 }])}
+                className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+              >
+                + Add Project
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {weekAllocations.map((alloc, idx) => (
+              <div key={idx} className="flex items-center gap-3">
+                <select
+                  className="input flex-1 text-sm"
+                  value={alloc.projectId}
+                  onChange={(e) => setWeekAllocations(prev => prev.map((a, i) => i === idx ? { ...a, projectId: e.target.value } : a))}
+                >
+                  <option value="">Select project...</option>
+                  {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+                </select>
+                <div className="relative w-24">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    className="input text-sm pr-6"
+                    value={alloc.percentage}
+                    onChange={(e) => setWeekAllocations(prev => prev.map((a, i) => i === idx ? { ...a, percentage: e.target.value } : a))}
+                  />
+                  <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400">%</span>
+                </div>
+                <button
+                  onClick={() => setWeekAllocations(prev => prev.filter((_, i) => i !== idx))}
+                  className="text-gray-400 hover:text-red-500 text-sm px-1"
+                >✕</button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Quick presets */}
+        <div className="mb-6 pt-3 border-t">
+          <p className="text-xs text-gray-500 mb-2">Quick presets:</p>
+          <div className="flex gap-2">
+            {[25, 50, 75, 100].map(pct => (
+              <button
+                key={pct}
+                onClick={() => {
+                  if (weekAllocations.length > 0) {
+                    setWeekAllocations(prev => prev.map((a, i) => i === 0 ? { ...a, percentage: pct } : a));
+                  }
+                }}
+                className="px-3 py-1 text-xs rounded-lg border hover:bg-gray-50 transition-colors"
+              >
+                {pct}%
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-3 pt-4 border-t">
+          <button onClick={() => setShowWeekModal(false)} className="btn-secondary">Cancel</button>
+          <button onClick={handleSaveWeekAllocations} className="btn-primary">Save Week</button>
         </div>
       </Modal>
     </div>

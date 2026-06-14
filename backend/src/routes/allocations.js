@@ -1,6 +1,7 @@
 const express = require('express');
 const { PrismaClient } = require('@prisma/client');
-const { authenticate } = require('../middleware/auth');
+const { authenticate, requireEditor } = require('../middleware/auth');
+const { startOfWeek, endOfWeek } = require('date-fns');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -37,8 +38,59 @@ router.get('/', async (req, res) => {
   }
 });
 
+// POST /api/allocations/week - Set allocation for entire week
+router.post('/week', requireEditor, async (req, res) => {
+  try {
+    const { personId, projectId, percentage, weekDate } = req.body;
+    // weekDate is any date in the target week
+    const date = new Date(weekDate);
+    const weekStart = startOfWeek(date, { weekStartsOn: 1 });
+    const weekEnd = endOfWeek(date, { weekStartsOn: 1 });
+
+    // Check for existing allocation for this person+project overlapping this week
+    const existing = await prisma.allocation.findFirst({
+      where: {
+        personId,
+        projectId,
+        startDate: { lte: weekEnd },
+        endDate: { gte: weekStart },
+      },
+    });
+
+    let allocation;
+    if (existing) {
+      // Update existing
+      allocation = await prisma.allocation.update({
+        where: { id: existing.id },
+        data: {
+          percentage: parseFloat(percentage),
+          startDate: weekStart < new Date(existing.startDate) ? weekStart : existing.startDate,
+          endDate: weekEnd > new Date(existing.endDate) ? weekEnd : existing.endDate,
+        },
+        include: { person: { include: { role: true } }, project: true },
+      });
+    } else {
+      // Create new for the week
+      allocation = await prisma.allocation.create({
+        data: {
+          personId,
+          projectId,
+          percentage: parseFloat(percentage),
+          startDate: weekStart,
+          endDate: weekEnd,
+        },
+        include: { person: { include: { role: true } }, project: true },
+      });
+    }
+
+    res.status(201).json(allocation);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/allocations
-router.post('/', async (req, res) => {
+router.post('/', requireEditor, async (req, res) => {
   try {
     const { personId, projectId, percentage, startDate, endDate, notes } = req.body;
     
@@ -60,7 +112,7 @@ router.post('/', async (req, res) => {
 });
 
 // PUT /api/allocations/:id
-router.put('/:id', async (req, res) => {
+router.put('/:id', requireEditor, async (req, res) => {
   try {
     const data = { ...req.body };
     if (data.startDate) data.startDate = new Date(data.startDate);
@@ -78,7 +130,7 @@ router.put('/:id', async (req, res) => {
 });
 
 // DELETE /api/allocations/:id
-router.delete('/:id', async (req, res) => {
+router.delete('/:id', requireEditor, async (req, res) => {
   try {
     await prisma.allocation.delete({ where: { id: req.params.id } });
     res.status(204).send();

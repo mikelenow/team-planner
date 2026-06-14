@@ -16,7 +16,7 @@ async function main() {
       email: 'admin@mrnow.at',
       password: hashedPassword,
       name: 'Admin',
-      isAdmin: true,
+      role: 'ADMIN',
     },
   });
   console.log('  ✓ Admin user created:', admin.email);
