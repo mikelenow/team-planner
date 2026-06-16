@@ -68,6 +68,10 @@ model Person {
   hoursThursday   Float    @default(8.0)
   hoursFriday     Float    @default(6.5)
   
+  // Jira/Tempo integration
+  jiraAccountId   String?  // Jira account ID (for Tempo API matching)
+  jiraEmail       String?  // Jira email (fallback matching)
+  
   startDate       DateTime?  // when they joined
   endDate         DateTime?  // if they left
   isActive        Boolean  @default(true)
@@ -91,6 +95,9 @@ model Project {
   startDate   DateTime?
   endDate     DateTime?
   isActive    Boolean  @default(true)
+  
+  // Jira/Tempo integration
+  jiraProjectKey  String?  // e.g. "NKD", "APOLLO" — maps to Jira project
   
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -164,4 +171,41 @@ model PublicHoliday {
   isHalfDay Boolean  @default(false)
   
   createdAt DateTime @default(now())
+}
+
+// ─── Tempo Integration ───────────────────────────────────────────────────────
+
+model TempoConfig {
+  id            String   @id @default(uuid())
+  baseUrl       String   @default("https://api.tempo.io/4")  // Tempo Cloud API
+  apiToken      String   // Tempo API token (encrypted at rest ideally)
+  jiraBaseUrl   String?  // e.g. "https://yourcompany.atlassian.net"
+  isActive      Boolean  @default(true)
+  lastSyncAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+// Cached worklogs fetched from Tempo
+model TempoWorklog {
+  id              String   @id @default(uuid())
+  tempoWorklogId  Int      @unique  // Tempo's own worklog ID
+  jiraAccountId   String   // Jira user account ID
+  jiraProjectKey  String   // Jira project key
+  jiraIssueKey    String   // e.g. "NKD-1234"
+  description     String?
+  date            DateTime
+  timeSpentHours  Float    // hours logged
+  
+  // Resolved links to team-planner entities (nullable if not matched)
+  personId        String?
+  projectId       String?
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([jiraAccountId, date])
+  @@index([jiraProjectKey, date])
+  @@index([personId, date])
+  @@index([projectId, date])
 }

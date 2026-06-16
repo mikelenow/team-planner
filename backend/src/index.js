@@ -14,6 +14,7 @@ const roleRoutes = require('./routes/roles');
 const holidayRoutes = require('./routes/holidays');
 const utilizationRoutes = require('./routes/utilization');
 const exportRoutes = require('./routes/export');
+const tempoRoutes = require('./routes/tempo');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,6 +36,7 @@ app.use('/api/roles', roleRoutes);
 app.use('/api/holidays', holidayRoutes);
 app.use('/api/utilization', utilizationRoutes);
 app.use('/api/export', exportRoutes);
+app.use('/api/tempo', tempoRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

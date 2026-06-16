@@ -16,6 +16,7 @@ export default function PeoplePage() {
   const [form, setForm] = useState({
     firstName: '', lastName: '', email: '', roleId: '', teamId: '',
     hoursMonday: 8, hoursTuesday: 8, hoursWednesday: 8, hoursThursday: 8, hoursFriday: 6.5,
+    jiraAccountId: '', jiraEmail: '',
   });
 
   useEffect(() => { loadData(); }, [filters]);
@@ -49,6 +50,7 @@ export default function PeoplePage() {
     setForm({
       firstName: '', lastName: '', email: '', roleId: defaultRole?.id || '', teamId: defaultTeam?.id || '',
       hoursMonday: 8, hoursTuesday: 8, hoursWednesday: 8, hoursThursday: 8, hoursFriday: 6.5,
+      jiraAccountId: '', jiraEmail: '',
     });
     setShowModal(true);
   };
@@ -66,6 +68,8 @@ export default function PeoplePage() {
       hoursWednesday: person.hoursWednesday,
       hoursThursday: person.hoursThursday,
       hoursFriday: person.hoursFriday,
+      jiraAccountId: person.jiraAccountId || '',
+      jiraEmail: person.jiraEmail || '',
     });
     setShowModal(true);
   };
@@ -223,6 +227,20 @@ export default function PeoplePage() {
             <p className="text-xs text-gray-500 mt-1">
               Weekly total: {form.hoursMonday + form.hoursTuesday + form.hoursWednesday + form.hoursThursday + form.hoursFriday}h
             </p>
+          </div>
+
+          <div className="border-t pt-4">
+            <label className="label text-gray-500">Jira / Tempo Integration (optional)</label>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-gray-500">Jira Account ID</label>
+                <input className="input text-sm" value={form.jiraAccountId} onChange={(e) => setForm(f => ({...f, jiraAccountId: e.target.value}))} placeholder="e.g. 5f4dcc3b5aa765d61d83" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500">Jira Email</label>
+                <input className="input text-sm" type="email" value={form.jiraEmail} onChange={(e) => setForm(f => ({...f, jiraEmail: e.target.value}))} placeholder="user@company.com" />
+              </div>
+            </div>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">

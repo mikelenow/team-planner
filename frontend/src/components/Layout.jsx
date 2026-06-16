@@ -9,6 +9,7 @@ import {
   Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
   ShieldCheckIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline';
 
 const navigation = [
@@ -17,6 +18,7 @@ const navigation = [
   { name: 'People', href: '/people', icon: UsersIcon },
   { name: 'Projects', href: '/projects', icon: FolderIcon },
   { name: 'Teams', href: '/teams', icon: UserGroupIcon },
+  { name: 'Tempo', href: '/tempo', icon: ClockIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
   { name: 'Users', href: '/users', icon: ShieldCheckIcon, adminOnly: true },
 ];

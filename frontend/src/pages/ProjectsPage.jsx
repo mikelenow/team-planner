@@ -9,7 +9,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
-  const [form, setForm] = useState({ name: '', code: '', color: '#3B82F6', description: '', startDate: '', endDate: '' });
+  const [form, setForm] = useState({ name: '', code: '', color: '#3B82F6', description: '', startDate: '', endDate: '', jiraProjectKey: '' });
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
 
@@ -28,7 +28,7 @@ export default function ProjectsPage() {
 
   const openCreate = () => {
     setEditingProject(null);
-    setForm({ name: '', code: '', color: '#3B82F6', description: '', startDate: '', endDate: '' });
+    setForm({ name: '', code: '', color: '#3B82F6', description: '', startDate: '', endDate: '', jiraProjectKey: '' });
     setLogoFile(null);
     setLogoPreview(null);
     setShowModal(true);
@@ -43,6 +43,7 @@ export default function ProjectsPage() {
       description: project.description || '',
       startDate: project.startDate ? project.startDate.split('T')[0] : '',
       endDate: project.endDate ? project.endDate.split('T')[0] : '',
+      jiraProjectKey: project.jiraProjectKey || '',
     });
     setLogoFile(null);
     setLogoPreview(project.logo ? `${import.meta.env.VITE_API_URL || ''}/uploads/logos/${project.logo}` : null);
@@ -59,6 +60,7 @@ export default function ProjectsPage() {
       formData.append('description', form.description);
       if (form.startDate) formData.append('startDate', form.startDate);
       if (form.endDate) formData.append('endDate', form.endDate);
+      if (form.jiraProjectKey) formData.append('jiraProjectKey', form.jiraProjectKey);
       if (logoFile) formData.append('logo', logoFile);
 
       if (editingProject) {
@@ -172,9 +174,14 @@ export default function ProjectsPage() {
               <input type="color" className="input h-10" value={form.color} onChange={(e) => setForm(f => ({...f, color: e.target.value}))} />
             </div>
             <div>
-              <label className="label">Description</label>
-              <input className="input" value={form.description} onChange={(e) => setForm(f => ({...f, description: e.target.value}))} />
+              <label className="label">Jira Project Key</label>
+              <input className="input" value={form.jiraProjectKey} onChange={(e) => setForm(f => ({...f, jiraProjectKey: e.target.value}))} placeholder="e.g. NKD, APOLLO" />
             </div>
+          </div>
+
+          <div>
+            <label className="label">Description</label>
+            <input className="input" value={form.description} onChange={(e) => setForm(f => ({...f, description: e.target.value}))} />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

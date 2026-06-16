@@ -83,6 +83,7 @@ router.post('/', upload.single('logo'), async (req, res) => {
       code: req.body.code,
       color: req.body.color || null,
       description: req.body.description || null,
+      jiraProjectKey: req.body.jiraProjectKey || null,
       startDate: req.body.startDate ? new Date(req.body.startDate) : null,
       endDate: req.body.endDate ? new Date(req.body.endDate) : null,
     };
@@ -104,6 +105,7 @@ router.put('/:id', upload.single('logo'), async (req, res) => {
     if (req.body.code !== undefined) data.code = req.body.code;
     if (req.body.color !== undefined) data.color = req.body.color || null;
     if (req.body.description !== undefined) data.description = req.body.description || null;
+    if (req.body.jiraProjectKey !== undefined) data.jiraProjectKey = req.body.jiraProjectKey || null;
     if (req.body.isActive !== undefined) data.isActive = req.body.isActive === 'true' || req.body.isActive === true;
     if (req.body.startDate !== undefined) data.startDate = req.body.startDate ? new Date(req.body.startDate) : null;
     if (req.body.endDate !== undefined) data.endDate = req.body.endDate ? new Date(req.body.endDate) : null;
