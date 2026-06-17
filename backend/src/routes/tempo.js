@@ -92,6 +92,24 @@ router.post('/sync', requireEditor, async (req, res) => {
   }
 });
 
+// POST /api/tempo/rematch - Re-match existing worklogs to people/projects
+router.post('/rematch', requireEditor, async (req, res) => {
+  try {
+    const service = await TempoService.getConfig();
+    if (!service) {
+      return res.status(400).json({ error: 'Tempo integration not configured.' });
+    }
+
+    const result = await service.rematchWorklogs();
+    res.json({
+      message: `Re-matched ${result.matched} of ${result.total} previously unmatched worklogs`,
+      ...result,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ─── Planned vs Actual Report ────────────────────────────────────────────────
 
 // GET /api/tempo/report?from=2026-06-01&to=2026-06-30&personId=...&projectId=...

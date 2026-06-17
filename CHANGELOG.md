@@ -14,6 +14,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Tempo sync not matching worklogs to people**: Added display name-based matching as a fallback when `jiraAccountId` and email don't match. The sync now tries: accountId → email → display name (firstName + lastName). On successful name match, auto-populates `jiraAccountId` on the Person record for future syncs.
 - **Added `jiraDisplayName` to TempoWorklog**: Stores the Tempo author name for debugging unmatched worklogs.
 - **Improved `/api/tempo/unmatched` endpoint**: Now shows grouped-by-author summary and supports date filtering.
+- **Fuzzy name matching for Tempo sync**: Normalizes hyphens, spaces, and casing when matching display names (e.g., "Matea Bekan-Ples" matches regardless of hyphen/space differences). Also tries reversed name order.
+- **Added `POST /api/tempo/rematch` endpoint**: Re-processes existing unmatched worklogs against current people/projects without needing to re-fetch from Tempo API.
 
 ---
 

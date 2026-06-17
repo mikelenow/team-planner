@@ -118,6 +118,9 @@ class TempoService {
       select: { id: true, code: true, jiraProjectKey: true },
     });
 
+    // Normalize name for fuzzy matching (lowercase, remove hyphens/special chars)
+    const normalizeName = (name) => name.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+
     // Build lookup maps
     const personByAccountId = new Map();
     const personByEmail = new Map();
@@ -126,9 +129,14 @@ class TempoService {
       if (p.jiraAccountId) personByAccountId.set(p.jiraAccountId, p.id);
       if (p.jiraEmail) personByEmail.set(p.jiraEmail.toLowerCase(), p.id);
       if (p.email) personByEmail.set(p.email.toLowerCase(), p.id);
-      // Name-based matching (fallback)
-      const fullName = `${p.firstName} ${p.lastName}`.toLowerCase().trim();
+      // Name-based matching (fallback) — multiple variants
+      const fullName = normalizeName(`${p.firstName} ${p.lastName}`);
+      const reversedName = normalizeName(`${p.lastName} ${p.firstName}`);
       if (fullName) personByName.set(fullName, p.id);
+      if (reversedName) personByName.set(reversedName, p.id);
+      // Also store with original casing normalized differently
+      const exactFull = `${p.firstName} ${p.lastName}`.toLowerCase().trim();
+      if (exactFull) personByName.set(exactFull, p.id);
     });
 
     const projectByKey = new Map();
@@ -157,7 +165,12 @@ class TempoService {
         personId = personByEmail.get(wl.author.emailAddress.toLowerCase()) || null;
       }
       if (!personId && wl.author?.displayName) {
-        personId = personByName.get(wl.author.displayName.toLowerCase().trim()) || null;
+        const normalizedDisplay = normalizeName(wl.author.displayName);
+        personId = personByName.get(normalizedDisplay) || null;
+        // Also try exact lowercase
+        if (!personId) {
+          personId = personByName.get(wl.author.displayName.toLowerCase().trim()) || null;
+        }
       }
 
       // Auto-populate jiraAccountId on successful match for future syncs
@@ -216,6 +229,84 @@ class TempoService {
     return { synced, unmatched, total: worklogs.length };
   }
 
+  /**
+   * Re-match existing unmatched worklogs to people/projects.
+   * Useful after adding people or fixing names.
+   */
+  async rematchWorklogs() {
+    const normalizeName = (name) => name.toLowerCase().replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+
+    const people = await prisma.person.findMany({
+      where: { isActive: true },
+      select: { id: true, firstName: true, lastName: true, email: true, jiraAccountId: true, jiraEmail: true },
+    });
+    const projects = await prisma.project.findMany({
+      select: { id: true, code: true, jiraProjectKey: true },
+    });
+
+    // Build lookup maps
+    const personByAccountId = new Map();
+    const personByEmail = new Map();
+    const personByName = new Map();
+    people.forEach(p => {
+      if (p.jiraAccountId) personByAccountId.set(p.jiraAccountId, p.id);
+      if (p.jiraEmail) personByEmail.set(p.jiraEmail.toLowerCase(), p.id);
+      if (p.email) personByEmail.set(p.email.toLowerCase(), p.id);
+      const fullName = normalizeName(`${p.firstName} ${p.lastName}`);
+      const reversedName = normalizeName(`${p.lastName} ${p.firstName}`);
+      if (fullName) personByName.set(fullName, p.id);
+      if (reversedName) personByName.set(reversedName, p.id);
+    });
+
+    const projectByKey = new Map();
+    projects.forEach(p => {
+      if (p.jiraProjectKey) projectByKey.set(p.jiraProjectKey.toUpperCase(), p.id);
+      if (p.code) projectByKey.set(p.code.toUpperCase(), p.id);
+    });
+
+    // Get all unmatched worklogs
+    const unmatchedWorklogs = await prisma.tempoWorklog.findMany({
+      where: {
+        OR: [{ personId: null }, { projectId: null }],
+      },
+    });
+
+    let matched = 0;
+    for (const wl of unmatchedWorklogs) {
+      let personId = wl.personId;
+      let projectId = wl.projectId;
+
+      if (!personId) {
+        personId = personByAccountId.get(wl.jiraAccountId) || null;
+        if (!personId && wl.jiraDisplayName) {
+          personId = personByName.get(normalizeName(wl.jiraDisplayName)) || null;
+        }
+      }
+
+      if (!projectId) {
+        projectId = projectByKey.get(wl.jiraProjectKey?.toUpperCase()) || null;
+      }
+
+      if (personId !== wl.personId || projectId !== wl.projectId) {
+        await prisma.tempoWorklog.update({
+          where: { id: wl.id },
+          data: { personId, projectId },
+        });
+        matched++;
+
+        // Auto-save jiraAccountId
+        if (personId && wl.jiraAccountId && !personByAccountId.has(wl.jiraAccountId)) {
+          personByAccountId.set(wl.jiraAccountId, personId);
+          await prisma.person.update({
+            where: { id: personId },
+            data: { jiraAccountId: wl.jiraAccountId },
+          }).catch(() => {});
+        }
+      }
+    }
+
+    return { matched, total: unmatchedWorklogs.length };
+  }
   /**
    * Get "Planned vs Actual" report for a date range.
    * Compares team-planner allocations with Tempo worklogs.
