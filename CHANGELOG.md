@@ -11,6 +11,9 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Fixed
 
 - **Database migration out of sync**: The `User` table schema had `role` (UserRole enum) and `isActive` fields in `schema.prisma` but the initial migration still used the old `isAdmin` boolean column. Created new migration `add_user_role_enum` to align the database with the schema, then re-ran seed successfully.
+- **Tempo sync not matching worklogs to people**: Added display name-based matching as a fallback when `jiraAccountId` and email don't match. The sync now tries: accountId → email → display name (firstName + lastName). On successful name match, auto-populates `jiraAccountId` on the Person record for future syncs.
+- **Added `jiraDisplayName` to TempoWorklog**: Stores the Tempo author name for debugging unmatched worklogs.
+- **Improved `/api/tempo/unmatched` endpoint**: Now shows grouped-by-author summary and supports date filtering.
 
 ---
 

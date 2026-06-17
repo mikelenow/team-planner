@@ -112,7 +112,7 @@ class TempoService {
     // Get all people and projects for matching
     const people = await prisma.person.findMany({
       where: { isActive: true },
-      select: { id: true, email: true, jiraAccountId: true, jiraEmail: true },
+      select: { id: true, firstName: true, lastName: true, email: true, jiraAccountId: true, jiraEmail: true },
     });
     const projects = await prisma.project.findMany({
       select: { id: true, code: true, jiraProjectKey: true },
@@ -121,10 +121,14 @@ class TempoService {
     // Build lookup maps
     const personByAccountId = new Map();
     const personByEmail = new Map();
+    const personByName = new Map();
     people.forEach(p => {
       if (p.jiraAccountId) personByAccountId.set(p.jiraAccountId, p.id);
       if (p.jiraEmail) personByEmail.set(p.jiraEmail.toLowerCase(), p.id);
       if (p.email) personByEmail.set(p.email.toLowerCase(), p.id);
+      // Name-based matching (fallback)
+      const fullName = `${p.firstName} ${p.lastName}`.toLowerCase().trim();
+      if (fullName) personByName.set(fullName, p.id);
     });
 
     const projectByKey = new Map();
@@ -145,11 +149,25 @@ class TempoService {
       const date = wl.startDate || wl.dateStarted?.split('T')[0] || '';
       const timeSpentHours = (wl.timeSpentSeconds || wl.timeSpent || 0) / 3600;
       const description = wl.description || '';
+      const jiraDisplayName = wl.author?.displayName || '';
 
-      // Match person
+      // Match person (try accountId -> email -> display name)
       let personId = personByAccountId.get(jiraAccountId) || null;
       if (!personId && wl.author?.emailAddress) {
         personId = personByEmail.get(wl.author.emailAddress.toLowerCase()) || null;
+      }
+      if (!personId && wl.author?.displayName) {
+        personId = personByName.get(wl.author.displayName.toLowerCase().trim()) || null;
+      }
+
+      // Auto-populate jiraAccountId on successful match for future syncs
+      if (personId && jiraAccountId && !personByAccountId.has(jiraAccountId)) {
+        personByAccountId.set(jiraAccountId, personId);
+        // Update the person record so future syncs match directly
+        await prisma.person.update({
+          where: { id: personId },
+          data: { jiraAccountId },
+        }).catch(() => {}); // ignore if already set by another worklog
       }
 
       // Match project
@@ -163,6 +181,7 @@ class TempoService {
         where: { tempoWorklogId },
         update: {
           jiraAccountId,
+          jiraDisplayName,
           jiraProjectKey,
           jiraIssueKey,
           description,
@@ -174,6 +193,7 @@ class TempoService {
         create: {
           tempoWorklogId,
           jiraAccountId,
+          jiraDisplayName,
           jiraProjectKey,
           jiraIssueKey,
           description,

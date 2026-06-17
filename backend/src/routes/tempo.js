@@ -139,14 +139,37 @@ router.get('/worklogs', async (req, res) => {
 // GET /api/tempo/unmatched - Worklogs that couldn't be matched to people/projects
 router.get('/unmatched', async (req, res) => {
   try {
+    const { from, to } = req.query;
+    const where = {
+      OR: [{ personId: null }, { projectId: null }],
+    };
+    if (from && to) {
+      where.date = { gte: new Date(from), lte: new Date(to) };
+    }
     const unmatched = await prisma.tempoWorklog.findMany({
-      where: {
-        OR: [{ personId: null }, { projectId: null }],
-      },
+      where,
       orderBy: { date: 'desc' },
-      take: 100,
+      take: 200,
     });
-    res.json(unmatched);
+
+    // Group by jiraAccountId to show unique unmatched authors
+    const authorMap = new Map();
+    unmatched.forEach(w => {
+      const key = w.jiraAccountId || 'unknown';
+      if (!authorMap.has(key)) {
+        authorMap.set(key, { jiraAccountId: w.jiraAccountId, count: 0, totalHours: 0, sampleIssues: [] });
+      }
+      const entry = authorMap.get(key);
+      entry.count++;
+      entry.totalHours += w.timeSpentHours;
+      if (entry.sampleIssues.length < 3) entry.sampleIssues.push(w.jiraIssueKey);
+    });
+
+    res.json({
+      total: unmatched.length,
+      byAuthor: Array.from(authorMap.values()),
+      worklogs: unmatched,
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
