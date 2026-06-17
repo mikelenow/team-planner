@@ -137,7 +137,7 @@ class TempoService {
       const batch = issueIds.slice(i, i + batchSize);
       try {
         const jql = `id in (${batch.join(',')})`;
-        const url = `${this.jiraBaseUrl}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=key&maxResults=${batchSize}`;
+        const url = `${this.jiraBaseUrl}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&fields=key&maxResults=${batchSize}`;
         const response = await fetch(url, {
           headers: {
             'Authorization': `Basic ${auth}`,

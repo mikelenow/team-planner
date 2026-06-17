@@ -14,6 +14,7 @@ export default function TempoPage() {
   const [rematching, setRematching] = useState(false);
   const [unmatched, setUnmatched] = useState(null);
   const [sampleRaw, setSampleRaw] = useState(null);
+  const [syncStats, setSyncStats] = useState(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [period, setPeriod] = useState('month'); // week | month | custom
   const [customFrom, setCustomFrom] = useState('');
@@ -64,16 +65,17 @@ export default function TempoPage() {
     try {
       const res = await api.post('/tempo/sync', { from, to });
       toast.success(res.data.message);
+      setSyncStats({
+        synced: res.data.synced,
+        unmatched: res.data.unmatched,
+        total: res.data.total,
+        jiraUsersResolved: res.data.jiraUsersResolved,
+        jiraIssueKeysResolved: res.data.jiraIssueKeysResolved,
+        uniqueIssueIds: res.data.uniqueIssueIds,
+        jiraErrors: res.data.jiraErrors,
+      });
       if (res.data.sampleRaw) {
-        setSampleRaw({
-          ...res.data.sampleRaw,
-          _syncStats: {
-            jiraUsersResolved: res.data.jiraUsersResolved,
-            jiraIssueKeysResolved: res.data.jiraIssueKeysResolved,
-            uniqueIssueIds: res.data.uniqueIssueIds,
-            jiraErrors: res.data.jiraErrors,
-          },
-        });
+        setSampleRaw(res.data.sampleRaw);
       }
       loadReport();
     } catch (err) {
