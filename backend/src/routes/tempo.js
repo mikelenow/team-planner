@@ -175,11 +175,12 @@ router.get('/unmatched', async (req, res) => {
     unmatched.forEach(w => {
       const key = w.jiraAccountId || 'unknown';
       if (!authorMap.has(key)) {
-        authorMap.set(key, { jiraAccountId: w.jiraAccountId, count: 0, totalHours: 0, sampleIssues: [] });
+        authorMap.set(key, { jiraAccountId: w.jiraAccountId, displayName: w.jiraDisplayName || '', count: 0, totalHours: 0, sampleIssues: [] });
       }
       const entry = authorMap.get(key);
       entry.count++;
       entry.totalHours += w.timeSpentHours;
+      if (!entry.displayName && w.jiraDisplayName) entry.displayName = w.jiraDisplayName;
       if (entry.sampleIssues.length < 3) entry.sampleIssues.push(w.jiraIssueKey);
     });
 

@@ -11,6 +11,8 @@ export default function TempoPage() {
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
+  const [rematching, setRematching] = useState(false);
+  const [unmatched, setUnmatched] = useState(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [period, setPeriod] = useState('month'); // week | month | custom
   const [customFrom, setCustomFrom] = useState('');
@@ -64,6 +66,29 @@ export default function TempoPage() {
       toast.error(err.response?.data?.error || 'Sync failed');
     } finally {
       setSyncing(false);
+    }
+  };
+
+  const handleRematch = async () => {
+    setRematching(true);
+    try {
+      const res = await api.post('/tempo/rematch');
+      toast.success(res.data.message);
+      loadReport();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Rematch failed');
+    } finally {
+      setRematching(false);
+    }
+  };
+
+  const loadUnmatched = async () => {
+    const { from, to } = getDateRange();
+    try {
+      const res = await api.get(`/tempo/unmatched?from=${from}&to=${to}`);
+      setUnmatched(res.data);
+    } catch (err) {
+      toast.error('Failed to load unmatched worklogs');
     }
   };
 
@@ -169,6 +194,18 @@ export default function TempoPage() {
           📊 Load Report
         </button>
 
+        <button
+          onClick={handleRematch}
+          disabled={rematching}
+          className="btn-secondary text-sm"
+        >
+          {rematching ? '⏳ Rematching...' : '🔗 Rematch'}
+        </button>
+
+        <button onClick={loadUnmatched} className="btn-secondary text-sm">
+          ❓ Unmatched
+        </button>
+
         {from && to && (
           <span className="text-xs text-gray-500">{from} → {to}</span>
         )}
@@ -238,6 +275,42 @@ export default function TempoPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Unmatched Section */}
+      {unmatched && (
+        <div className="card mt-6 bg-orange-50 border-orange-200">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-orange-900">⚠️ Unmatched Worklogs ({unmatched.total})</h3>
+            <button onClick={() => setUnmatched(null)} className="text-sm text-gray-500 hover:text-gray-700">✕ Close</button>
+          </div>
+          {unmatched.byAuthor && unmatched.byAuthor.length > 0 ? (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-gray-500 uppercase border-b">
+                  <th className="text-left py-1">Jira Account ID</th>
+                  <th className="text-left py-1">Display Name</th>
+                  <th className="text-right py-1">Worklogs</th>
+                  <th className="text-right py-1">Hours</th>
+                  <th className="text-left py-1">Sample Issues</th>
+                </tr>
+              </thead>
+              <tbody>
+                {unmatched.byAuthor.map((a, i) => (
+                  <tr key={i} className="border-b border-orange-100">
+                    <td className="py-1.5 font-mono text-xs">{a.jiraAccountId || '-'}</td>
+                    <td className="py-1.5">{a.displayName || '-'}</td>
+                    <td className="text-right py-1.5">{a.count}</td>
+                    <td className="text-right py-1.5 font-medium">{Math.round(a.totalHours * 10) / 10}h</td>
+                    <td className="py-1.5 text-xs text-gray-500">{a.sampleIssues?.join(', ')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p className="text-sm text-green-800">✅ All worklogs are matched!</p>
+          )}
         </div>
       )}
 
