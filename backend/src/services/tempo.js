@@ -129,6 +129,7 @@ class TempoService {
     const keys = new Map();
     if (!this.jiraBaseUrl || !this.jiraEmail || !this.jiraApiToken || issueIds.length === 0) return keys;
     const auth = Buffer.from(`${this.jiraEmail}:${this.jiraApiToken}`).toString('base64');
+    this._jiraErrors = [];
 
     // Process in batches of 100 (Jira JQL limit)
     const batchSize = 100;
@@ -136,7 +137,7 @@ class TempoService {
       const batch = issueIds.slice(i, i + batchSize);
       try {
         const jql = `id in (${batch.join(',')})`;
-        const url = `${this.jiraBaseUrl}/rest/api/3/search?jql=${encodeURIComponent(jql)}&fields=key&maxResults=${batchSize}`;
+        const url = `${this.jiraBaseUrl}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=key&maxResults=${batchSize}`;
         const response = await fetch(url, {
           headers: {
             'Authorization': `Basic ${auth}`,
@@ -144,7 +145,9 @@ class TempoService {
           },
         });
         if (!response.ok) {
-          console.error(`Jira search failed (batch ${i}):`, response.status, await response.text());
+          const errText = await response.text();
+          console.error(`Jira search failed (batch ${i}):`, response.status, errText);
+          this._jiraErrors.push(`Batch ${i}: ${response.status} - ${errText.slice(0, 200)}`);
           continue;
         }
         const data = await response.json();
@@ -153,6 +156,7 @@ class TempoService {
         }
       } catch (err) {
         console.error(`Jira search error (batch ${i}):`, err.message);
+        this._jiraErrors.push(`Batch ${i}: ${err.message}`);
       }
     }
     return keys;
@@ -346,6 +350,10 @@ class TempoService {
       synced,
       unmatched,
       total: worklogs.length,
+      jiraUsersResolved: jiraUsers.size,
+      jiraIssueKeysResolved: jiraIssueKeys.size,
+      uniqueIssueIds: uniqueIssueIds.length,
+      jiraErrors: this._jiraErrors || [],
       sampleRaw: worklogs.length > 0 ? JSON.parse(JSON.stringify(worklogs[0])) : null,
     };
   }

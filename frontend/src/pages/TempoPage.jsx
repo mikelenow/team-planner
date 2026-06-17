@@ -65,7 +65,15 @@ export default function TempoPage() {
       const res = await api.post('/tempo/sync', { from, to });
       toast.success(res.data.message);
       if (res.data.sampleRaw) {
-        setSampleRaw(res.data.sampleRaw);
+        setSampleRaw({
+          ...res.data.sampleRaw,
+          _syncStats: {
+            jiraUsersResolved: res.data.jiraUsersResolved,
+            jiraIssueKeysResolved: res.data.jiraIssueKeysResolved,
+            uniqueIssueIds: res.data.uniqueIssueIds,
+            jiraErrors: res.data.jiraErrors,
+          },
+        });
       }
       loadReport();
     } catch (err) {
