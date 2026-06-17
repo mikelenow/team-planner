@@ -99,6 +99,66 @@ class TempoService {
   }
 
   /**
+   * Fetch Jira issue key by issue ID.
+   * Returns the issue key (e.g. "AMA-103") or null.
+   */
+  async fetchJiraIssueKey(issueId) {
+    if (!this.jiraBaseUrl || !this.jiraEmail || !this.jiraApiToken) return null;
+    try {
+      const url = `${this.jiraBaseUrl}/rest/api/3/issue/${issueId}?fields=key`;
+      const auth = Buffer.from(`${this.jiraEmail}:${this.jiraApiToken}`).toString('base64');
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return data.key || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fetch Jira issue keys for multiple issue IDs using JQL bulk search.
+   * Returns Map<issueId, issueKey>.
+   */
+  async fetchJiraIssueKeys(issueIds) {
+    const keys = new Map();
+    if (!this.jiraBaseUrl || !this.jiraEmail || !this.jiraApiToken || issueIds.length === 0) return keys;
+    const auth = Buffer.from(`${this.jiraEmail}:${this.jiraApiToken}`).toString('base64');
+
+    // Process in batches of 100 (Jira JQL limit)
+    const batchSize = 100;
+    for (let i = 0; i < issueIds.length; i += batchSize) {
+      const batch = issueIds.slice(i, i + batchSize);
+      try {
+        const jql = `id in (${batch.join(',')})`;
+        const url = `${this.jiraBaseUrl}/rest/api/3/search?jql=${encodeURIComponent(jql)}&fields=key&maxResults=${batchSize}`;
+        const response = await fetch(url, {
+          headers: {
+            'Authorization': `Basic ${auth}`,
+            'Content-Type': 'application/json',
+          },
+        });
+        if (!response.ok) {
+          console.error(`Jira search failed (batch ${i}):`, response.status, await response.text());
+          continue;
+        }
+        const data = await response.json();
+        for (const issue of (data.issues || [])) {
+          keys.set(String(issue.id), issue.key);
+        }
+      } catch (err) {
+        console.error(`Jira search error (batch ${i}):`, err.message);
+      }
+    }
+    return keys;
+  }
+
+  /**
    * Fetch worklogs for a date range.
    * Handles pagination automatically.
    * 
@@ -162,6 +222,11 @@ class TempoService {
     const jiraUsers = await this.fetchJiraUsers(uniqueAccountIds);
     console.log(`Fetched ${jiraUsers.size} Jira user profiles for ${uniqueAccountIds.length} account IDs`);
 
+    // Collect unique issue IDs and fetch their keys from Jira
+    const uniqueIssueIds = [...new Set(worklogs.map(wl => wl.issue?.id).filter(Boolean))];
+    const jiraIssueKeys = await this.fetchJiraIssueKeys(uniqueIssueIds);
+    console.log(`Fetched ${jiraIssueKeys.size} Jira issue keys for ${uniqueIssueIds.length} issue IDs`);
+
     // Get all people and projects for matching
     const people = await prisma.person.findMany({
       where: { isActive: true },
@@ -202,7 +267,8 @@ class TempoService {
     for (const wl of worklogs) {
       const tempoWorklogId = wl.tempoWorklogId || wl.id;
       const jiraAccountId = wl.author?.accountId || wl.worker || '';
-      const jiraIssueKey = wl.issue?.key || wl.issueKey || '';
+      const jiraIssueId = wl.issue?.id ? String(wl.issue.id) : '';
+      const jiraIssueKey = wl.issue?.key || jiraIssueKeys.get(jiraIssueId) || wl.issueKey || '';
       const jiraProjectKey = jiraIssueKey.split('-')[0] || '';
       const date = wl.startDate || wl.dateStarted?.split('T')[0] || '';
       const timeSpentHours = (wl.timeSpentSeconds || wl.timeSpent || 0) / 3600;
@@ -243,6 +309,7 @@ class TempoService {
         update: {
           jiraAccountId,
           jiraDisplayName,
+          jiraIssueId,
           jiraProjectKey,
           jiraIssueKey,
           description,
@@ -255,6 +322,7 @@ class TempoService {
           tempoWorklogId,
           jiraAccountId,
           jiraDisplayName,
+          jiraIssueId,
           jiraProjectKey,
           jiraIssueKey,
           description,
@@ -329,6 +397,11 @@ class TempoService {
     const jiraUsers = await this.fetchJiraUsers(unmatchedAccountIds);
     console.log(`Rematch: fetched ${jiraUsers.size} Jira profiles for ${unmatchedAccountIds.length} unmatched accounts`);
 
+    // Fetch Jira issue keys for worklogs with empty project key
+    const issueIdsToLookup = [...new Set(unmatchedWorklogs.filter(w => !w.projectId && !w.jiraProjectKey && w.jiraIssueId).map(w => w.jiraIssueId))];
+    const jiraIssueKeys = await this.fetchJiraIssueKeys(issueIdsToLookup);
+    console.log(`Rematch: fetched ${jiraIssueKeys.size} Jira issue keys for ${issueIdsToLookup.length} issues`);
+
     let matched = 0;
     for (const wl of unmatchedWorklogs) {
       let personId = wl.personId;
@@ -360,7 +433,22 @@ class TempoService {
       }
 
       if (!projectId) {
-        projectId = projectByKey.get(wl.jiraProjectKey?.toUpperCase()) || null;
+        let projectKey = wl.jiraProjectKey;
+        // If no project key stored, look it up from Jira issue ID
+        if (!projectKey && wl.jiraIssueId) {
+          const issueKey = jiraIssueKeys.get(wl.jiraIssueId);
+          if (issueKey) {
+            projectKey = issueKey.split('-')[0];
+            // Update the stored keys on this worklog
+            await prisma.tempoWorklog.update({
+              where: { id: wl.id },
+              data: { jiraIssueKey: issueKey, jiraProjectKey: projectKey },
+            }).catch(() => {});
+          }
+        }
+        if (projectKey) {
+          projectId = projectByKey.get(projectKey.toUpperCase()) || null;
+        }
       }
 
       if (personId !== wl.personId || projectId !== wl.projectId) {

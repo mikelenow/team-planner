@@ -194,6 +194,7 @@ model TempoWorklog {
   tempoWorklogId  Int      @unique  // Tempo's own worklog ID
   jiraAccountId   String   // Jira user account ID
   jiraDisplayName String?  // Author display name from Tempo (for debugging)
+  jiraIssueId     String?  // Jira issue ID (numeric, from Tempo API)
   jiraProjectKey  String   // Jira project key
   jiraIssueKey    String   // e.g. "NKD-1234"
   description     String?
