@@ -36,6 +36,8 @@ services:
     networks:
       - backend
       - frontend
+    volumes:
+      - uploads_data:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -90,3 +92,4 @@ networks:
 
 volumes:
   postgres_data:
+  uploads_data:
