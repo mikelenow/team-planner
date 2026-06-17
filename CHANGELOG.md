@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## 2026-06-17
+
+### Fixed
+
+- **Database migration out of sync**: The `User` table schema had `role` (UserRole enum) and `isActive` fields in `schema.prisma` but the initial migration still used the old `isAdmin` boolean column. Created new migration `add_user_role_enum` to align the database with the schema, then re-ran seed successfully.
+
+---
+
 ## 2026-06-14
 
 ### Added
