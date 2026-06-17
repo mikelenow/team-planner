@@ -371,7 +371,18 @@ class TempoService {
       }
     }
 
-    return { matched, total: unmatchedWorklogs.length };
+    return { matched, total: unmatchedWorklogs.length, debug: {
+      peopleCount: people.length,
+      projectsCount: projects.length,
+      projectKeys: Array.from(projectByKey.keys()),
+      sampleWorklogs: unmatchedWorklogs.slice(0, 5).map(w => ({
+        jiraProjectKey: w.jiraProjectKey,
+        jiraAccountId: w.jiraAccountId,
+        jiraDisplayName: w.jiraDisplayName,
+        personId: w.personId,
+        projectId: w.projectId,
+      })),
+    } };
   }
   /**
    * Get "Planned vs Actual" report for a date range.

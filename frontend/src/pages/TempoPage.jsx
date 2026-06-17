@@ -76,6 +76,10 @@ export default function TempoPage() {
     try {
       const res = await api.post('/tempo/rematch');
       toast.success(res.data.message);
+      if (res.data.debug) {
+        console.log('Rematch debug:', JSON.stringify(res.data.debug, null, 2));
+        setUnmatched(prev => ({ ...prev, debug: res.data.debug }));
+      }
       loadReport();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Rematch failed');
@@ -312,6 +316,18 @@ export default function TempoPage() {
             </table>
           ) : (
             <p className="text-sm text-green-800">✅ All worklogs are matched!</p>
+          )}
+          {unmatched.debug && (
+            <div className="mt-4 p-3 bg-gray-100 rounded text-xs font-mono overflow-auto max-h-60">
+              <p className="font-bold mb-1">Debug Info:</p>
+              <p>People in DB: {unmatched.debug.peopleCount}</p>
+              <p>Projects in DB: {unmatched.debug.projectsCount}</p>
+              <p>Project keys in lookup: {unmatched.debug.projectKeys?.join(', ') || 'none'}</p>
+              <p className="mt-2 font-bold">Sample unmatched worklogs:</p>
+              {unmatched.debug.sampleWorklogs?.map((w, i) => (
+                <p key={i}>#{i+1}: projectKey="{w.jiraProjectKey}" displayName="{w.jiraDisplayName}" personId={w.personId ? 'SET' : 'null'} projectId={w.projectId ? 'SET' : 'null'}</p>
+              ))}
+            </div>
           )}
         </div>
       )}
