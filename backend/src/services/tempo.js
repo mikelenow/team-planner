@@ -18,6 +18,8 @@ class TempoService {
     this.baseUrl = config.baseUrl;
     this.apiToken = config.apiToken;
     this.jiraBaseUrl = config.jiraBaseUrl;
+    this.jiraEmail = config.jiraEmail;
+    this.jiraApiToken = config.jiraApiToken;
   }
 
   /**
@@ -53,6 +55,47 @@ class TempoService {
     }
 
     return response.json();
+  }
+
+  /**
+   * Fetch Jira user details by account ID.
+   * Returns { accountId, displayName, emailAddress } or null.
+   */
+  async fetchJiraUser(accountId) {
+    if (!this.jiraBaseUrl || !this.jiraEmail || !this.jiraApiToken) return null;
+    try {
+      const url = `${this.jiraBaseUrl}/rest/api/3/user?accountId=${encodeURIComponent(accountId)}`;
+      const auth = Buffer.from(`${this.jiraEmail}:${this.jiraApiToken}`).toString('base64');
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Basic ${auth}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) return null;
+      const data = await response.json();
+      return {
+        accountId: data.accountId,
+        displayName: data.displayName || '',
+        emailAddress: data.emailAddress || '',
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Fetch Jira user details for multiple account IDs (with caching).
+   * Returns Map<accountId, { displayName, emailAddress }>.
+   */
+  async fetchJiraUsers(accountIds) {
+    const users = new Map();
+    for (const id of accountIds) {
+      if (!id || users.has(id)) continue;
+      const user = await this.fetchJiraUser(id);
+      if (user) users.set(id, user);
+    }
+    return users;
   }
 
   /**
@@ -109,6 +152,11 @@ class TempoService {
   async syncWorklogs(from, to) {
     const worklogs = await this.fetchWorklogs({ from, to });
 
+    // Collect unique account IDs and fetch their Jira profiles
+    const uniqueAccountIds = [...new Set(worklogs.map(wl => wl.author?.accountId || wl.worker).filter(Boolean))];
+    const jiraUsers = await this.fetchJiraUsers(uniqueAccountIds);
+    console.log(`Fetched ${jiraUsers.size} Jira user profiles for ${uniqueAccountIds.length} account IDs`);
+
     // Get all people and projects for matching
     const people = await prisma.person.findMany({
       where: { isActive: true },
@@ -134,9 +182,6 @@ class TempoService {
       const reversedName = normalizeName(`${p.lastName} ${p.firstName}`);
       if (fullName) personByName.set(fullName, p.id);
       if (reversedName) personByName.set(reversedName, p.id);
-      // Also store with original casing normalized differently
-      const exactFull = `${p.firstName} ${p.lastName}`.toLowerCase().trim();
-      if (exactFull) personByName.set(exactFull, p.id);
     });
 
     const projectByKey = new Map();
@@ -157,30 +202,28 @@ class TempoService {
       const date = wl.startDate || wl.dateStarted?.split('T')[0] || '';
       const timeSpentHours = (wl.timeSpentSeconds || wl.timeSpent || 0) / 3600;
       const description = wl.description || '';
-      const jiraDisplayName = wl.author?.displayName || '';
 
-      // Match person (try accountId -> email -> display name)
+      // Get Jira user info for this worklog's author
+      const jiraUser = jiraUsers.get(jiraAccountId);
+      const jiraDisplayName = jiraUser?.displayName || wl.author?.displayName || '';
+      const jiraEmailAddr = jiraUser?.emailAddress || wl.author?.emailAddress || '';
+
+      // Match person (try accountId -> jira email -> person email -> display name)
       let personId = personByAccountId.get(jiraAccountId) || null;
-      if (!personId && wl.author?.emailAddress) {
-        personId = personByEmail.get(wl.author.emailAddress.toLowerCase()) || null;
+      if (!personId && jiraEmailAddr) {
+        personId = personByEmail.get(jiraEmailAddr.toLowerCase()) || null;
       }
-      if (!personId && wl.author?.displayName) {
-        const normalizedDisplay = normalizeName(wl.author.displayName);
-        personId = personByName.get(normalizedDisplay) || null;
-        // Also try exact lowercase
-        if (!personId) {
-          personId = personByName.get(wl.author.displayName.toLowerCase().trim()) || null;
-        }
+      if (!personId && jiraDisplayName) {
+        personId = personByName.get(normalizeName(jiraDisplayName)) || null;
       }
 
       // Auto-populate jiraAccountId on successful match for future syncs
       if (personId && jiraAccountId && !personByAccountId.has(jiraAccountId)) {
         personByAccountId.set(jiraAccountId, personId);
-        // Update the person record so future syncs match directly
         await prisma.person.update({
           where: { id: personId },
           data: { jiraAccountId },
-        }).catch(() => {}); // ignore if already set by another worklog
+        }).catch(() => {});
       }
 
       // Match project
@@ -271,6 +314,11 @@ class TempoService {
       },
     });
 
+    // Fetch Jira user profiles for unmatched account IDs
+    const unmatchedAccountIds = [...new Set(unmatchedWorklogs.filter(w => !w.personId && w.jiraAccountId).map(w => w.jiraAccountId))];
+    const jiraUsers = await this.fetchJiraUsers(unmatchedAccountIds);
+    console.log(`Rematch: fetched ${jiraUsers.size} Jira profiles for ${unmatchedAccountIds.length} unmatched accounts`);
+
     let matched = 0;
     for (const wl of unmatchedWorklogs) {
       let personId = wl.personId;
@@ -278,6 +326,24 @@ class TempoService {
 
       if (!personId) {
         personId = personByAccountId.get(wl.jiraAccountId) || null;
+
+        // Try Jira email
+        if (!personId) {
+          const jiraUser = jiraUsers.get(wl.jiraAccountId);
+          if (jiraUser?.emailAddress) {
+            personId = personByEmail.get(jiraUser.emailAddress.toLowerCase()) || null;
+          }
+          // Try Jira display name
+          if (!personId && jiraUser?.displayName) {
+            personId = personByName.get(normalizeName(jiraUser.displayName)) || null;
+          }
+          // Update stored display name
+          if (jiraUser?.displayName && jiraUser.displayName !== wl.jiraDisplayName) {
+            await prisma.tempoWorklog.update({ where: { id: wl.id }, data: { jiraDisplayName: jiraUser.displayName } }).catch(() => {});
+          }
+        }
+
+        // Fallback to stored display name
         if (!personId && wl.jiraDisplayName) {
           personId = personByName.get(normalizeName(wl.jiraDisplayName)) || null;
         }

@@ -22,6 +22,8 @@ export default function TempoPage() {
     baseUrl: 'https://api.tempo.io/4',
     apiToken: '',
     jiraBaseUrl: '',
+    jiraEmail: '',
+    jiraApiToken: '',
   });
 
   useEffect(() => { loadConfig(); }, []);
@@ -350,11 +352,33 @@ export default function TempoPage() {
               placeholder="https://yourcompany.atlassian.net"
             />
           </div>
+          <div>
+            <label className="label">Jira Email (for user lookup)</label>
+            <input
+              className="input"
+              type="email"
+              value={configForm.jiraEmail}
+              onChange={(e) => setConfigForm(f => ({...f, jiraEmail: e.target.value}))}
+              placeholder="your-email@company.com"
+            />
+            <p className="text-xs text-gray-500 mt-1">Used to fetch display names from Jira for matching</p>
+          </div>
+          <div>
+            <label className="label">Jira API Token</label>
+            <input
+              className="input"
+              type="password"
+              value={configForm.jiraApiToken}
+              onChange={(e) => setConfigForm(f => ({...f, jiraApiToken: e.target.value}))}
+              placeholder="Generate at id.atlassian.com/manage-profile/security/api-tokens"
+            />
+          </div>
 
           <div className="p-3 bg-blue-50 rounded-lg text-xs text-blue-800 space-y-1">
             <p><strong>How matching works:</strong></p>
-            <p>• People are matched by <strong>Jira Account ID</strong> or <strong>email</strong> (set on each person's profile)</p>
+            <p>• People are matched by <strong>Jira Account ID</strong>, <strong>email</strong>, or <strong>display name</strong></p>
             <p>• Projects are matched by <strong>Jira Project Key</strong> (set on each project, e.g. "NKD")</p>
+            <p>• Jira credentials are needed to look up user names/emails from account IDs</p>
           </div>
 
           <div className="flex justify-end gap-3 pt-4">

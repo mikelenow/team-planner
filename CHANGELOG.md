@@ -16,6 +16,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Improved `/api/tempo/unmatched` endpoint**: Now shows grouped-by-author summary and supports date filtering.
 - **Fuzzy name matching for Tempo sync**: Normalizes hyphens, spaces, and casing when matching display names (e.g., "Matea Bekan-Ples" matches regardless of hyphen/space differences). Also tries reversed name order.
 - **Added `POST /api/tempo/rematch` endpoint**: Re-processes existing unmatched worklogs against current people/projects without needing to re-fetch from Tempo API.
+- **Jira user lookup for Tempo matching**: Tempo API only returns account IDs, not names. Now fetches display names and emails from Jira REST API during sync/rematch to enable name-based matching. Added Jira email + API token fields to Tempo config.
 
 ---
 

@@ -19,6 +19,7 @@ router.get('/config', requireAdmin, async (req, res) => {
     res.json({
       ...config,
       apiToken: config.apiToken ? '••••••••' + config.apiToken.slice(-4) : null,
+      jiraApiToken: config.jiraApiToken ? '••••••••' + config.jiraApiToken.slice(-4) : null,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -28,7 +29,7 @@ router.get('/config', requireAdmin, async (req, res) => {
 // POST /api/tempo/config - Create or update Tempo config
 router.post('/config', requireAdmin, async (req, res) => {
   try {
-    const { baseUrl, apiToken, jiraBaseUrl } = req.body;
+    const { baseUrl, apiToken, jiraBaseUrl, jiraEmail, jiraApiToken } = req.body;
 
     // Deactivate existing configs
     await prisma.tempoConfig.updateMany({
@@ -41,6 +42,8 @@ router.post('/config', requireAdmin, async (req, res) => {
         baseUrl: baseUrl || 'https://api.tempo.io/4',
         apiToken,
         jiraBaseUrl: jiraBaseUrl || null,
+        jiraEmail: jiraEmail || null,
+        jiraApiToken: jiraApiToken || null,
         isActive: true,
       },
     });
@@ -48,6 +51,7 @@ router.post('/config', requireAdmin, async (req, res) => {
     res.status(201).json({
       ...config,
       apiToken: '••••••••' + config.apiToken.slice(-4),
+      jiraApiToken: config.jiraApiToken ? '••••••••' + config.jiraApiToken.slice(-4) : null,
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

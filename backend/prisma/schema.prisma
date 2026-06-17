@@ -180,6 +180,8 @@ model TempoConfig {
   baseUrl       String   @default("https://api.tempo.io/4")  // Tempo Cloud API
   apiToken      String   // Tempo API token (encrypted at rest ideally)
   jiraBaseUrl   String?  // e.g. "https://yourcompany.atlassian.net"
+  jiraEmail     String?  // Jira user email (for Jira REST API auth)
+  jiraApiToken  String?  // Jira API token (for Jira REST API auth)
   isActive      Boolean  @default(true)
   lastSyncAt    DateTime?
   createdAt     DateTime @default(now())
