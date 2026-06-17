@@ -13,6 +13,7 @@ export default function TempoPage() {
   const [syncing, setSyncing] = useState(false);
   const [rematching, setRematching] = useState(false);
   const [unmatched, setUnmatched] = useState(null);
+  const [sampleRaw, setSampleRaw] = useState(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [period, setPeriod] = useState('month'); // week | month | custom
   const [customFrom, setCustomFrom] = useState('');
@@ -63,6 +64,9 @@ export default function TempoPage() {
     try {
       const res = await api.post('/tempo/sync', { from, to });
       toast.success(res.data.message);
+      if (res.data.sampleRaw) {
+        setSampleRaw(res.data.sampleRaw);
+      }
       loadReport();
     } catch (err) {
       toast.error(err.response?.data?.error || 'Sync failed');
@@ -281,6 +285,17 @@ export default function TempoPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Raw Tempo API sample (debug) */}
+      {sampleRaw && (
+        <div className="card mt-6 bg-gray-50 border-gray-200">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-semibold text-gray-700">🔍 Raw Tempo API Response (1st worklog)</h3>
+            <button onClick={() => setSampleRaw(null)} className="text-sm text-gray-500 hover:text-gray-700">✕ Close</button>
+          </div>
+          <pre className="text-xs font-mono bg-white p-3 rounded border overflow-auto max-h-80">{JSON.stringify(sampleRaw, null, 2)}</pre>
         </div>
       )}
 

@@ -152,6 +152,11 @@ class TempoService {
   async syncWorklogs(from, to) {
     const worklogs = await this.fetchWorklogs({ from, to });
 
+    // Log first worklog to understand Tempo API structure
+    if (worklogs.length > 0) {
+      console.log('Sample Tempo worklog structure:', JSON.stringify(worklogs[0], null, 2));
+    }
+
     // Collect unique account IDs and fetch their Jira profiles
     const uniqueAccountIds = [...new Set(worklogs.map(wl => wl.author?.accountId || wl.worker).filter(Boolean))];
     const jiraUsers = await this.fetchJiraUsers(uniqueAccountIds);
@@ -269,7 +274,12 @@ class TempoService {
       data: { lastSyncAt: new Date() },
     });
 
-    return { synced, unmatched, total: worklogs.length };
+    return {
+      synced,
+      unmatched,
+      total: worklogs.length,
+      sampleRaw: worklogs.length > 0 ? JSON.parse(JSON.stringify(worklogs[0])) : null,
+    };
   }
 
   /**
