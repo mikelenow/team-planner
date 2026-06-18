@@ -124,11 +124,27 @@ model Project {
   
   // Jira/Tempo integration
   jiraProjectKey  String?  // e.g. "NKD", "APOLLO" — maps to Jira project
-  
+
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
-  
+
   allocations Allocation[]
+  codes       ProjectCode[]  // additional codes beyond the primary `code`
+}
+
+// ─── Project Codes (additional codes for one project) ────────────────────────
+// A project keeps its primary `Project.code`; this holds extra codes so one
+// project can be identified by several keys (e.g. PNEU + PSD for Pneuhage).
+// All codes (primary + these) are used for Tempo/Jira worklog matching.
+
+model ProjectCode {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code      String   @unique
+  createdAt DateTime @default(now())
+
+  @@index([projectId])
 }
 
 // ─── Allocations (person ↔ project, percentage-based) ────────────────────────

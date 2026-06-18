@@ -38,6 +38,29 @@ const upload = multer({
 
 router.use(authenticate);
 
+/**
+ * Parse the `codes` field (additional project codes) from a request body.
+ * Accepts a JSON array or a comma/newline-separated string. Trims, drops
+ * blanks, removes the primary code, and de-duplicates (case-insensitive).
+ * Returns `undefined` when the field is absent (so it isn't touched on update).
+ */
+function parseCodes(raw, primaryCode) {
+  if (raw === undefined || raw === null) return undefined;
+  const arr = Array.isArray(raw) ? raw : String(raw).split(/[,\n]/);
+  const primary = (primaryCode || '').trim().toUpperCase();
+  const seen = new Set();
+  const out = [];
+  for (const item of arr) {
+    const code = String(item).trim();
+    if (!code) continue;
+    const upper = code.toUpperCase();
+    if (upper === primary || seen.has(upper)) continue;
+    seen.add(upper);
+    out.push(code);
+  }
+  return out;
+}
+
 // GET /api/projects
 router.get('/', async (req, res) => {
   try {
@@ -47,7 +70,10 @@ router.get('/', async (req, res) => {
 
     const projects = await prisma.project.findMany({
       where,
-      include: { _count: { select: { allocations: true } } },
+      include: {
+        _count: { select: { allocations: true } },
+        codes: { select: { id: true, code: true }, orderBy: { code: 'asc' } },
+      },
       orderBy: { name: 'asc' },
     });
     res.json(projects);
@@ -62,6 +88,7 @@ router.get('/:id', async (req, res) => {
     const project = await prisma.project.findUnique({
       where: { id: req.params.id },
       include: {
+        codes: { select: { id: true, code: true }, orderBy: { code: 'asc' } },
         allocations: {
           include: { person: { include: { role: true } } },
           orderBy: { startDate: 'desc' },
@@ -90,7 +117,16 @@ router.post('/', upload.single('logo'), async (req, res) => {
     if (req.file) {
       data.logo = req.file.filename;
     }
-    const project = await prisma.project.create({ data });
+
+    const codes = parseCodes(req.body.codes, req.body.code);
+
+    const project = await prisma.project.create({
+      data: {
+        ...data,
+        ...(codes ? { codes: { create: codes.map(c => ({ code: c })) } } : {}),
+      },
+      include: { codes: { select: { id: true, code: true } } },
+    });
     res.status(201).json(project);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -134,7 +170,24 @@ router.put('/:id', upload.single('logo'), async (req, res) => {
       where: { id: req.params.id },
       data,
     });
-    res.json(project);
+
+    // Sync additional codes if provided
+    const codes = parseCodes(req.body.codes, project.code);
+    if (codes !== undefined) {
+      // Delete existing codes and re-create
+      await prisma.projectCode.deleteMany({ where: { projectId: req.params.id } });
+      if (codes.length > 0) {
+        await prisma.projectCode.createMany({
+          data: codes.map(c => ({ projectId: req.params.id, code: c })),
+        });
+      }
+    }
+
+    const updated = await prisma.project.findUnique({
+      where: { id: req.params.id },
+      include: { codes: { select: { id: true, code: true } } },
+    });
+    res.json(updated);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

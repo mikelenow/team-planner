@@ -9,7 +9,7 @@ export default function ProjectsPage() {
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingProject, setEditingProject] = useState(null);
-  const [form, setForm] = useState({ name: '', code: '', color: '#3B82F6', description: '', startDate: '', endDate: '', jiraProjectKey: '' });
+  const [form, setForm] = useState({ name: '', code: '', codes: '', color: '#3B82F6', description: '', startDate: '', endDate: '', jiraProjectKey: '' });
   const [logoFile, setLogoFile] = useState(null);
   const [logoPreview, setLogoPreview] = useState(null);
 
@@ -28,7 +28,7 @@ export default function ProjectsPage() {
 
   const openCreate = () => {
     setEditingProject(null);
-    setForm({ name: '', code: '', color: '#3B82F6', description: '', startDate: '', endDate: '', jiraProjectKey: '' });
+    setForm({ name: '', code: '', codes: '', color: '#3B82F6', description: '', startDate: '', endDate: '', jiraProjectKey: '' });
     setLogoFile(null);
     setLogoPreview(null);
     setShowModal(true);
@@ -39,6 +39,7 @@ export default function ProjectsPage() {
     setForm({
       name: project.name,
       code: project.code,
+      codes: project.codes?.map(c => c.code).join(', ') || '',
       color: project.color || '#3B82F6',
       description: project.description || '',
       startDate: project.startDate ? project.startDate.split('T')[0] : '',
@@ -61,6 +62,7 @@ export default function ProjectsPage() {
       if (form.startDate) formData.append('startDate', form.startDate);
       if (form.endDate) formData.append('endDate', form.endDate);
       if (form.jiraProjectKey) formData.append('jiraProjectKey', form.jiraProjectKey);
+      if (form.codes !== undefined) formData.append('codes', form.codes);
       if (logoFile) formData.append('logo', logoFile);
 
       if (editingProject) {
@@ -132,7 +134,10 @@ export default function ProjectsPage() {
                   <Link to={`/projects/${project.id}`} className="font-semibold text-gray-900 hover:text-primary-600">
                     {project.name}
                   </Link>
-                  <p className="text-xs text-gray-500 mt-0.5">{project.code}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {project.code}
+                    {project.codes?.length > 0 && <span className="text-gray-400"> + {project.codes.map(c => c.code).join(', ')}</span>}
+                  </p>
                   {project.description && <p className="text-sm text-gray-600 mt-1">{project.description}</p>}
                 </div>
               </div>
@@ -164,8 +169,14 @@ export default function ProjectsPage() {
             </div>
             <div>
               <label className="label">Code *</label>
-              <input className="input" value={form.code} onChange={(e) => setForm(f => ({...f, code: e.target.value}))} required placeholder="e.g. PROJ-001" />
+              <input className="input" value={form.code} onChange={(e) => setForm(f => ({...f, code: e.target.value}))} required placeholder="e.g. PNEU" />
             </div>
+          </div>
+
+          <div>
+            <label className="label">Additional Codes</label>
+            <input className="input" value={form.codes} onChange={(e) => setForm(f => ({...f, codes: e.target.value}))} placeholder="e.g. PSD, PNEU-SD (comma-separated)" />
+            <p className="text-xs text-gray-500 mt-1">Extra Jira project keys that map to this project. Used for Tempo worklog matching.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

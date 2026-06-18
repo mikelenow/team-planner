@@ -11,6 +11,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Added
 
 - **Multi-day absences from Timeline**: The absence form on the Timeline cell modal now supports date ranges (start/end date) instead of single-day only. Date fields appear after selecting an absence type, pre-filled with the clicked date. End date auto-adjusts if set before start date.
+- **Multiple project codes**: Projects can now have additional codes beyond the primary one (e.g. PNEU + PSD for Pneuhage). Additional codes are used for Tempo worklog matching — worklogs from any of the codes map to the same project. Comma-separated input on the project form.
 
 - **Per-week working hours (weekly schedule overrides)**: People who change which days/hours they work week to week can now have a per-week override of their daily hours. A person keeps default `hoursMonday`–`hoursFriday`, but any week can override them (set a day to `0` to mark it as not worked).
   - New `WeeklySchedule` model (`personId` + `weekStart` Monday + the five day-hour fields), with `@@unique([personId, weekStart])`. Migration `add_weekly_schedule`.

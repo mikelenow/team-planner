@@ -237,7 +237,7 @@ class TempoService {
       select: { id: true, firstName: true, lastName: true, email: true, jiraAccountId: true, jiraEmail: true },
     });
     const projects = await prisma.project.findMany({
-      select: { id: true, code: true, jiraProjectKey: true },
+      select: { id: true, code: true, jiraProjectKey: true, codes: { select: { code: true } } },
     });
 
     // Normalize name for fuzzy matching (lowercase, remove hyphens/special chars)
@@ -262,6 +262,8 @@ class TempoService {
     projects.forEach(p => {
       if (p.jiraProjectKey) projectByKey.set(p.jiraProjectKey.toUpperCase(), p.id);
       if (p.code) projectByKey.set(p.code.toUpperCase(), p.id);
+      // Additional codes
+      if (p.codes) p.codes.forEach(c => projectByKey.set(c.code.toUpperCase(), p.id));
     });
 
     // Upsert worklogs
@@ -370,7 +372,7 @@ class TempoService {
       select: { id: true, firstName: true, lastName: true, email: true, jiraAccountId: true, jiraEmail: true },
     });
     const projects = await prisma.project.findMany({
-      select: { id: true, code: true, jiraProjectKey: true },
+      select: { id: true, code: true, jiraProjectKey: true, codes: { select: { code: true } } },
     });
 
     // Build lookup maps
@@ -391,6 +393,7 @@ class TempoService {
     projects.forEach(p => {
       if (p.jiraProjectKey) projectByKey.set(p.jiraProjectKey.toUpperCase(), p.id);
       if (p.code) projectByKey.set(p.code.toUpperCase(), p.id);
+      if (p.codes) p.codes.forEach(c => projectByKey.set(c.code.toUpperCase(), p.id));
     });
 
     // Get all unmatched worklogs
