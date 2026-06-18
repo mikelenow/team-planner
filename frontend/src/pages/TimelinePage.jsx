@@ -22,7 +22,7 @@ export default function TimelinePage() {
   const [editingCell, setEditingCell] = useState(null);
   const [showCellModal, setShowCellModal] = useState(false);
   const [cellAllocations, setCellAllocations] = useState([]);
-  const [cellAbsence, setCellAbsence] = useState({ absenceTypeId: '', isHalfDay: false });
+  const [cellAbsence, setCellAbsence] = useState({ absenceTypeId: '', isHalfDay: false, startDate: '', endDate: '' });
 
   // Week editing state
   const [showWeekModal, setShowWeekModal] = useState(false);
@@ -147,7 +147,7 @@ export default function TimelinePage() {
       dayData,
     });
     setCellAllocations(activeAllocations.length > 0 ? activeAllocations : [{ id: null, projectId: '', percentage: 100, startDate: dateStr, endDate: dateStr }]);
-    setCellAbsence({ absenceTypeId: '', isHalfDay: false });
+    setCellAbsence({ absenceTypeId: '', isHalfDay: false, startDate: dateStr, endDate: dateStr });
     setShowCellModal(true);
   };
 
@@ -305,8 +305,8 @@ export default function TimelinePage() {
         await api.post('/absences', {
           personId: editingCell.personId,
           absenceTypeId: cellAbsence.absenceTypeId,
-          startDate: editingCell.date,
-          endDate: editingCell.date,
+          startDate: cellAbsence.startDate || editingCell.date,
+          endDate: cellAbsence.endDate || cellAbsence.startDate || editingCell.date,
           isHalfDay: cellAbsence.isHalfDay,
         });
       }
@@ -591,25 +591,50 @@ export default function TimelinePage() {
 
         {/* Quick absence */}
         <div className="mb-6 pt-4 border-t">
-          <h3 className="font-medium text-sm text-gray-700 mb-3">Add Absence (for this day)</h3>
-          <div className="flex items-center gap-3">
+          <h3 className="font-medium text-sm text-gray-700 mb-3">Absence</h3>
+          <div className="space-y-3">
             <select
-              className="input flex-1 text-sm"
+              className="input text-sm"
               value={cellAbsence.absenceTypeId}
               onChange={(e) => setCellAbsence(prev => ({ ...prev, absenceTypeId: e.target.value }))}
             >
               <option value="">No absence</option>
               {absenceTypes.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
-            <label className="flex items-center gap-1.5 text-sm whitespace-nowrap">
-              <input
-                type="checkbox"
-                checked={cellAbsence.isHalfDay}
-                onChange={(e) => setCellAbsence(prev => ({ ...prev, isHalfDay: e.target.checked }))}
-                className="rounded"
-              />
-              Half day
-            </label>
+            {cellAbsence.absenceTypeId && (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500">Start Date</label>
+                    <input
+                      type="date"
+                      className="input text-sm"
+                      value={cellAbsence.startDate}
+                      onChange={(e) => setCellAbsence(prev => ({ ...prev, startDate: e.target.value, endDate: prev.endDate < e.target.value ? e.target.value : prev.endDate }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500">End Date</label>
+                    <input
+                      type="date"
+                      className="input text-sm"
+                      value={cellAbsence.endDate}
+                      min={cellAbsence.startDate}
+                      onChange={(e) => setCellAbsence(prev => ({ ...prev, endDate: e.target.value }))}
+                    />
+                  </div>
+                </div>
+                <label className="flex items-center gap-1.5 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={cellAbsence.isHalfDay}
+                    onChange={(e) => setCellAbsence(prev => ({ ...prev, isHalfDay: e.target.checked }))}
+                    className="rounded"
+                  />
+                  Half day
+                </label>
+              </>
+            )}
           </div>
         </div>
 
