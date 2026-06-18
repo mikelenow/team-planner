@@ -29,6 +29,12 @@ export default function TimelinePage() {
   const [weekEditPerson, setWeekEditPerson] = useState(null);
   const [weekAllocations, setWeekAllocations] = useState([]);
 
+  // Weekly working-hours override state
+  const [showHoursModal, setShowHoursModal] = useState(false);
+  const [hoursEditPerson, setHoursEditPerson] = useState(null);
+  const [hoursForm, setHoursForm] = useState({ hoursMonday: 0, hoursTuesday: 0, hoursWednesday: 0, hoursThursday: 0, hoursFriday: 0 });
+  const [hoursHasOverride, setHoursHasOverride] = useState(false);
+
   useEffect(() => { loadRolesTeams(); }, []);
   useEffect(() => { loadUtilization(); }, [currentDate, viewMode, filters]);
 
@@ -201,6 +207,76 @@ export default function TimelinePage() {
     }
   };
 
+  // ─── Weekly working-hours override ─────────────────────────────────────────
+
+  const HOUR_DAYS = [
+    ['hoursMonday', 'Mon'], ['hoursTuesday', 'Tue'], ['hoursWednesday', 'Wed'],
+    ['hoursThursday', 'Thu'], ['hoursFriday', 'Fri'],
+  ];
+
+  const handleHoursEdit = async (personItem) => {
+    if (!isEditor) return;
+    const { start } = getDateRange();
+    const weekStart = format(startOfWeek(start, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const weekEnd = format(endOfWeek(start, { weekStartsOn: 1 }), 'yyyy-MM-dd');
+    const p = personItem.person;
+
+    // Defaults from the person record (returned by /utilization)
+    const defaults = {
+      hoursMonday: p.hoursMonday, hoursTuesday: p.hoursTuesday, hoursWednesday: p.hoursWednesday,
+      hoursThursday: p.hoursThursday, hoursFriday: p.hoursFriday,
+    };
+
+    setHoursEditPerson({ id: p.id, name: `${p.firstName} ${p.lastName}`, weekStart, weekEnd, defaults });
+
+    try {
+      const res = await api.get('/schedules', { params: { personId: p.id, from: weekStart, to: weekEnd } });
+      const override = res.data.find(s => format(new Date(s.weekStart), 'yyyy-MM-dd') === weekStart);
+      if (override) {
+        setHoursForm({
+          hoursMonday: override.hoursMonday, hoursTuesday: override.hoursTuesday, hoursWednesday: override.hoursWednesday,
+          hoursThursday: override.hoursThursday, hoursFriday: override.hoursFriday,
+        });
+        setHoursHasOverride(true);
+      } else {
+        setHoursForm(defaults);
+        setHoursHasOverride(false);
+      }
+    } catch (err) {
+      setHoursForm(defaults);
+      setHoursHasOverride(false);
+    }
+    setShowHoursModal(true);
+  };
+
+  const handleSaveHours = async () => {
+    try {
+      await api.post('/schedules', {
+        personId: hoursEditPerson.id,
+        weekStart: hoursEditPerson.weekStart,
+        ...Object.fromEntries(HOUR_DAYS.map(([f]) => [f, parseFloat(hoursForm[f]) || 0])),
+      });
+      toast.success('Weekly hours saved');
+      setShowHoursModal(false);
+      loadUtilization();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save hours');
+    }
+  };
+
+  const handleResetHours = async () => {
+    try {
+      await api.delete('/schedules', { params: { personId: hoursEditPerson.id, weekStart: hoursEditPerson.weekStart } });
+      toast.success('Reset to default hours');
+      setShowHoursModal(false);
+      loadUtilization();
+    } catch (err) {
+      toast.error('Failed to reset');
+    }
+  };
+
+  const hoursWeekTotal = HOUR_DAYS.reduce((sum, [f]) => sum + (parseFloat(hoursForm[f]) || 0), 0);
+
   // ─── Save allocations from cell modal ─────────────────────────────────────
 
   const handleSaveCellAllocations = async () => {
@@ -325,7 +401,7 @@ export default function TimelinePage() {
         <span className="flex items-center gap-1"><span className="w-4 h-4 rounded" style={{ backgroundColor: '#fef3c7' }}></span> 81–100%</span>
         <span className="flex items-center gap-1"><span className="w-4 h-4 rounded" style={{ backgroundColor: '#fee2e2' }}></span> Over 100%</span>
         <span className="flex items-center gap-1"><span className="w-4 h-4 rounded bg-gray-300"></span> Holiday/Absence</span>
-        {isEditor && <span className="text-gray-400 ml-2">💡 Click any cell to edit • Use "Week" button for bulk</span>}
+        {isEditor && <span className="text-gray-400 ml-2">💡 Click any cell to edit • ✏️ bulk-allocate a week • 🕐 set weekly working hours</span>}
       </div>
 
       {loading ? (
@@ -339,7 +415,7 @@ export default function TimelinePage() {
                   Person
                 </th>
                 {isEditor && (
-                  <th className="px-1 py-3 text-center text-xs font-medium text-gray-500 uppercase border-b min-w-[60px]">
+                  <th className="px-1 py-3 text-center text-xs font-medium text-gray-500 uppercase border-b min-w-[88px]">
                     Week
                   </th>
                 )}
@@ -366,13 +442,22 @@ export default function TimelinePage() {
                   </td>
                   {isEditor && (
                     <td className="px-1 py-2 text-center">
-                      <button
-                        onClick={() => handleWeekEdit(item)}
-                        className="h-8 w-full flex items-center justify-center rounded bg-primary-50 text-primary-600 text-xs font-medium hover:bg-primary-100 transition-colors"
-                        title="Set allocation for entire week"
-                      >
-                        ✏️
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleWeekEdit(item)}
+                          className="h-8 flex-1 flex items-center justify-center rounded bg-primary-50 text-primary-600 text-xs font-medium hover:bg-primary-100 transition-colors"
+                          title="Set allocation for entire week"
+                        >
+                          ✏️
+                        </button>
+                        <button
+                          onClick={() => handleHoursEdit(item)}
+                          className="h-8 flex-1 flex items-center justify-center rounded bg-amber-50 text-amber-600 text-xs font-medium hover:bg-amber-100 transition-colors"
+                          title="Set working hours for this week"
+                        >
+                          🕐
+                        </button>
+                      </div>
                     </td>
                   )}
                   {workDays.map((day) => {
@@ -616,6 +701,69 @@ export default function TimelinePage() {
         <div className="flex justify-end gap-3 pt-4 border-t">
           <button onClick={() => setShowWeekModal(false)} className="btn-secondary">Cancel</button>
           <button onClick={handleSaveWeekAllocations} className="btn-primary">Save Week</button>
+        </div>
+      </Modal>
+
+      {/* ─── Weekly Working Hours Modal ───────────────────────────────────────── */}
+      <Modal isOpen={showHoursModal} onClose={() => setShowHoursModal(false)} title={`Working Hours — ${hoursEditPerson?.name}`} size="md">
+        <div className="mb-4">
+          <span className="text-sm text-gray-500">
+            📅 Week: {hoursEditPerson?.weekStart} → {hoursEditPerson?.weekEnd}
+          </span>
+          <p className="text-xs text-gray-400 mt-1">
+            Override how many hours this person works each day <strong>this week only</strong>. Set a day to 0 if they don't work it.
+            {hoursHasOverride
+              ? ' This week currently uses a custom schedule.'
+              : ' This week currently uses their default schedule.'}
+          </p>
+        </div>
+
+        <div className="grid grid-cols-5 gap-2 mb-4">
+          {HOUR_DAYS.map(([field, label]) => (
+            <div key={field}>
+              <label className="block text-xs font-medium text-gray-500 text-center mb-1">{label}</label>
+              <input
+                type="number"
+                min="0"
+                max="24"
+                step="0.5"
+                className="input text-sm text-center px-1"
+                value={hoursForm[field]}
+                onChange={(e) => setHoursForm(prev => ({ ...prev, [field]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center justify-between mb-4 text-sm">
+          <span className="text-gray-500">
+            Default: {HOUR_DAYS.map(([f]) => hoursEditPerson?.defaults?.[f]).join(' / ')}
+          </span>
+          <span className="font-medium text-gray-700">Week total: {Math.round(hoursWeekTotal * 10) / 10}h</span>
+        </div>
+
+        <div className="flex items-center gap-2 mb-4">
+          <button
+            type="button"
+            onClick={() => setHoursForm(hoursEditPerson?.defaults || hoursForm)}
+            className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+          >
+            Fill from default
+          </button>
+        </div>
+
+        <div className="flex justify-between gap-3 pt-4 border-t">
+          <button
+            onClick={handleResetHours}
+            disabled={!hoursHasOverride}
+            className={`text-sm ${hoursHasOverride ? 'text-red-500 hover:text-red-700' : 'text-gray-300 cursor-not-allowed'}`}
+          >
+            Reset to default
+          </button>
+          <div className="flex gap-3">
+            <button onClick={() => setShowHoursModal(false)} className="btn-secondary">Cancel</button>
+            <button onClick={handleSaveHours} className="btn-primary">Save Hours</button>
+          </div>
         </div>
       </Modal>
     </div>

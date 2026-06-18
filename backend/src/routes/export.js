@@ -2,7 +2,8 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate } = require('../middleware/auth');
 const XLSX = require('xlsx');
-const { eachDayOfInterval, format, getDay } = require('date-fns');
+const { eachDayOfInterval, format, startOfWeek } = require('date-fns');
+const { buildScheduleLookup, getDailyHours } = require('../utils/workingHours');
 
 const router = express.Router();
 const prisma = new PrismaClient();
@@ -41,6 +42,14 @@ router.get('/utilization', async (req, res) => {
       where: { date: { gte: start, lte: end } },
     });
 
+    const schedules = await prisma.weeklySchedule.findMany({
+      where: {
+        personId: { in: people.map(p => p.id) },
+        weekStart: { gte: startOfWeek(start, { weekStartsOn: 1 }), lte: end },
+      },
+    });
+    const scheduleLookup = buildScheduleLookup(schedules);
+
     const days = eachDayOfInterval({ start, end });
     const holidayDates = new Set(holidays.map(h => format(new Date(h.date), 'yyyy-MM-dd')));
 
@@ -62,15 +71,9 @@ router.get('/utilization', async (req, res) => {
 
       for (const day of days) {
         const dateStr = format(day, 'yyyy-MM-dd');
-        const dow = getDay(day);
 
-        // Get base hours
-        let baseHours = 0;
-        if (dow === 1) baseHours = person.hoursMonday;
-        else if (dow === 2) baseHours = person.hoursTuesday;
-        else if (dow === 3) baseHours = person.hoursWednesday;
-        else if (dow === 4) baseHours = person.hoursThursday;
-        else if (dow === 5) baseHours = person.hoursFriday;
+        // Get base hours (honours per-week schedule overrides)
+        const baseHours = getDailyHours(person, day, scheduleLookup);
 
         if (baseHours === 0 || holidayDates.has(dateStr)) {
           row[dateStr] = '-';

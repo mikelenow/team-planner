@@ -70,7 +70,7 @@ team-planner/
 
 ## Key Design Decisions
 
-- **Working hours**: Mon–Thu = 8h, Fri = 6.5h (38.5h/week default, customizable per person for part-time)
+- **Working hours**: Mon–Thu = 8h, Fri = 6.5h (38.5h/week default, customizable per person for part-time). Can be overridden per week via `WeeklySchedule` for people whose working days/hours vary week to week — resolved by `backend/src/utils/workingHours.js`
 - **Utilization**: `(allocated hours / available hours) × 100`
 - **Holidays**: Austrian (Steiermark), dynamically calculated per year
 - **Allocations**: Percentage-based, per person per project, with date ranges

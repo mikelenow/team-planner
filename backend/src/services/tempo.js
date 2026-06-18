@@ -532,7 +532,8 @@ class TempoService {
     });
 
     // Calculate planned hours per person per project
-    const { eachDayOfInterval, getDay, format } = require('date-fns');
+    const { eachDayOfInterval, format, startOfWeek } = require('date-fns');
+    const { buildScheduleLookup, getDailyHours } = require('../utils/workingHours');
     const days = eachDayOfInterval({ start: new Date(from), end: new Date(to) });
 
     const holidays = await prisma.publicHoliday.findMany({
@@ -540,19 +541,25 @@ class TempoService {
     });
     const holidayDates = new Set(holidays.map(h => format(new Date(h.date), 'yyyy-MM-dd')));
 
+    const schedules = await prisma.weeklySchedule.findMany({
+      where: {
+        personId: { in: people.map(p => p.id) },
+        weekStart: { gte: startOfWeek(new Date(from), { weekStartsOn: 1 }), lte: new Date(to) },
+      },
+    });
+    const scheduleLookup = buildScheduleLookup(schedules);
+
     const report = [];
 
     for (const person of people) {
       // Calculate working days and hours in period
       let totalWorkingHours = 0;
       for (const day of days) {
-        const dow = getDay(day);
         const dateStr = format(day, 'yyyy-MM-dd');
-        if (dow === 0 || dow === 6) continue; // weekend
         if (holidayDates.has(dateStr)) continue; // holiday
 
-        const dayHours = [0, person.hoursMonday, person.hoursTuesday, person.hoursWednesday, person.hoursThursday, person.hoursFriday, 0][dow];
-        totalWorkingHours += dayHours;
+        // honours per-week schedule overrides; returns 0 on weekends/off days
+        totalWorkingHours += getDailyHours(person, day, scheduleLookup);
       }
 
       // Get this person's allocations

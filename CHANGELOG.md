@@ -6,6 +6,20 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## 2026-06-18
+
+### Added
+
+- **Per-week working hours (weekly schedule overrides)**: People who change which days/hours they work week to week can now have a per-week override of their daily hours. A person keeps default `hoursMonday`–`hoursFriday`, but any week can override them (set a day to `0` to mark it as not worked).
+  - New `WeeklySchedule` model (`personId` + `weekStart` Monday + the five day-hour fields), with `@@unique([personId, weekStart])`. Migration `add_weekly_schedule`.
+  - New `/api/schedules` routes: `GET` (list a person's overrides, optional `from`/`to`), `POST` (upsert a week by `personId` + `weekStart`, normalized to the Monday), `DELETE` (reset a week to the default).
+  - Shared `backend/src/utils/workingHours.js` helper (`getDailyHours`, `buildScheduleLookup`, `weekStartKey`) resolves a person's hours for any date against overrides, falling back to defaults.
+  - Capacity calculators now honour overrides: utilization, XLSX/CSV export, and the Tempo planned-vs-actual report.
+  - **Timeline**: new 🕐 button in the Week column to set/reset a person's working hours for the displayed week.
+  - **Person detail**: new "Weekly Working Hours" card listing overrides with add/edit/delete (and showing the default schedule).
+
+---
+
 ## 2026-06-17
 
 ### Fixed

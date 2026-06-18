@@ -81,6 +81,32 @@ model Person {
   
   allocations     Allocation[]
   absences        Absence[]
+  weeklySchedules WeeklySchedule[]
+}
+
+// ─── Weekly Schedule Overrides (per-week working hours) ──────────────────────
+// When present, overrides the Person's default hoursMonday..hoursFriday for the
+// week starting on `weekStart` (always a Monday). Lets people work different
+// days/hours week to week. A day set to 0 means "not working that day".
+
+model WeeklySchedule {
+  id             String   @id @default(uuid())
+  personId       String
+  person         Person   @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  weekStart      DateTime // Monday of the target week (date only, UTC midnight)
+
+  hoursMonday    Float    @default(0)
+  hoursTuesday   Float    @default(0)
+  hoursWednesday Float    @default(0)
+  hoursThursday  Float    @default(0)
+  hoursFriday    Float    @default(0)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([personId, weekStart])
+  @@index([personId, weekStart])
 }
 
 // ─── Projects ────────────────────────────────────────────────────────────────

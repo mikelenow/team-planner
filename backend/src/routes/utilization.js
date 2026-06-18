@@ -2,27 +2,12 @@ const express = require('express');
 const { PrismaClient } = require('@prisma/client');
 const { authenticate } = require('../middleware/auth');
 const { eachDayOfInterval, isWeekend, format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, getDay } = require('date-fns');
+const { buildScheduleLookup, getDailyHours } = require('../utils/workingHours');
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
 router.use(authenticate);
-
-/**
- * Calculate available hours for a person on a given day.
- * Returns 0 for weekends & public holidays, handles part-time.
- */
-function getPersonDailyHours(person, dayOfWeek) {
-  // dayOfWeek: 0=Sun, 1=Mon, 2=Tue, 3=Wed, 4=Thu, 5=Fri, 6=Sat
-  switch (dayOfWeek) {
-    case 1: return person.hoursMonday;
-    case 2: return person.hoursTuesday;
-    case 3: return person.hoursWednesday;
-    case 4: return person.hoursThursday;
-    case 5: return person.hoursFriday;
-    default: return 0; // weekend
-  }
-}
 
 /**
  * Check if a date falls within any absence period
@@ -83,7 +68,7 @@ router.get('/', async (req, res) => {
     });
 
     // Fetch all relevant data
-    const [allocations, absences, holidays] = await Promise.all([
+    const [allocations, absences, holidays, schedules] = await Promise.all([
       prisma.allocation.findMany({
         where: {
           startDate: { lte: end },
@@ -103,7 +88,15 @@ router.get('/', async (req, res) => {
       prisma.publicHoliday.findMany({
         where: { date: { gte: start, lte: end } },
       }),
+      prisma.weeklySchedule.findMany({
+        where: {
+          personId: { in: people.map(p => p.id) },
+          weekStart: { gte: startOfWeek(start, { weekStartsOn: 1 }), lte: end },
+        },
+      }),
     ]);
+
+    const scheduleLookup = buildScheduleLookup(schedules);
 
     // Calculate utilization for each person
     const days = eachDayOfInterval({ start, end });
@@ -116,8 +109,7 @@ router.get('/', async (req, res) => {
       let totalAbsenceHours = 0;
 
       const dailyData = days.map(day => {
-        const dayOfWeek = getDay(day);
-        const baseHours = getPersonDailyHours(person, dayOfWeek);
+        const baseHours = getDailyHours(person, day, scheduleLookup);
 
         if (baseHours === 0) {
           return { date: format(day, 'yyyy-MM-dd'), available: 0, allocated: 0, absence: 0, holiday: false, weekend: true, utilization: 0 };
@@ -170,6 +162,11 @@ router.get('/', async (req, res) => {
           lastName: person.lastName,
           role: person.role,
           team: person.team,
+          hoursMonday: person.hoursMonday,
+          hoursTuesday: person.hoursTuesday,
+          hoursWednesday: person.hoursWednesday,
+          hoursThursday: person.hoursThursday,
+          hoursFriday: person.hoursFriday,
         },
         summary: {
           totalAvailableHours: Math.round(totalAvailableHours * 10) / 10,

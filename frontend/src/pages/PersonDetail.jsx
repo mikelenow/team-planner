@@ -10,9 +10,14 @@ export default function PersonDetail() {
   const [person, setPerson] = useState(null);
   const [projects, setProjects] = useState([]);
   const [absenceTypes, setAbsenceTypes] = useState([]);
+  const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [showAbsenceModal, setShowAbsenceModal] = useState(false);
+  const [showHoursModal, setShowHoursModal] = useState(false);
+  const [hoursForm, setHoursForm] = useState({
+    weekStart: '', hoursMonday: 8, hoursTuesday: 8, hoursWednesday: 8, hoursThursday: 8, hoursFriday: 6.5,
+  });
 
   const [allocationForm, setAllocationForm] = useState({
     projectId: '', percentage: 100, startDate: '', endDate: '', notes: '',
@@ -25,14 +30,16 @@ export default function PersonDetail() {
 
   const loadData = async () => {
     try {
-      const [personRes, projectsRes, typesRes] = await Promise.all([
+      const [personRes, projectsRes, typesRes, schedulesRes] = await Promise.all([
         api.get(`/people/${id}`),
         api.get('/projects?isActive=true'),
         api.get('/absences/types'),
+        api.get('/schedules', { params: { personId: id } }),
       ]);
       setPerson(personRes.data);
       setProjects(projectsRes.data);
       setAbsenceTypes(typesRes.data);
+      setSchedules(schedulesRes.data);
     } catch (err) {
       toast.error('Failed to load person');
     } finally {
@@ -80,6 +87,66 @@ export default function PersonDetail() {
     try {
       await api.delete(`/absences/${absId}`);
       toast.success('Absence removed');
+      loadData();
+    } catch (err) {
+      toast.error('Failed to remove');
+    }
+  };
+
+  const HOUR_DAYS = [
+    ['hoursMonday', 'Mon'], ['hoursTuesday', 'Tue'], ['hoursWednesday', 'Wed'],
+    ['hoursThursday', 'Thu'], ['hoursFriday', 'Fri'],
+  ];
+
+  // Monday (yyyy-MM-dd) of the week containing the given date string
+  const mondayOf = (dateStr) => {
+    const d = new Date(dateStr);
+    const day = d.getDay(); // 0=Sun..6=Sat
+    const diff = (day === 0 ? -6 : 1) - day;
+    d.setDate(d.getDate() + diff);
+    return d.toISOString().slice(0, 10);
+  };
+
+  const openAddHours = () => {
+    setHoursForm({
+      weekStart: mondayOf(new Date().toISOString().slice(0, 10)),
+      hoursMonday: person.hoursMonday, hoursTuesday: person.hoursTuesday, hoursWednesday: person.hoursWednesday,
+      hoursThursday: person.hoursThursday, hoursFriday: person.hoursFriday,
+    });
+    setShowHoursModal(true);
+  };
+
+  const openEditHours = (s) => {
+    setHoursForm({
+      weekStart: new Date(s.weekStart).toISOString().slice(0, 10),
+      hoursMonday: s.hoursMonday, hoursTuesday: s.hoursTuesday, hoursWednesday: s.hoursWednesday,
+      hoursThursday: s.hoursThursday, hoursFriday: s.hoursFriday,
+    });
+    setShowHoursModal(true);
+  };
+
+  const handleSaveHours = async (e) => {
+    e.preventDefault();
+    try {
+      await api.post('/schedules', {
+        personId: id,
+        weekStart: hoursForm.weekStart,
+        ...Object.fromEntries(['hoursMonday', 'hoursTuesday', 'hoursWednesday', 'hoursThursday', 'hoursFriday']
+          .map(f => [f, parseFloat(hoursForm[f]) || 0])),
+      });
+      toast.success('Weekly hours saved');
+      setShowHoursModal(false);
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to save');
+    }
+  };
+
+  const handleDeleteHours = async (s) => {
+    if (!confirm('Reset this week to the default schedule?')) return;
+    try {
+      await api.delete('/schedules', { params: { personId: id, weekStart: new Date(s.weekStart).toISOString().slice(0, 10) } });
+      toast.success('Override removed');
       loadData();
     } catch (err) {
       toast.error('Failed to remove');
@@ -168,6 +235,90 @@ export default function PersonDetail() {
           )}
         </div>
       </div>
+
+      {/* Weekly Hours */}
+      <div className="card mt-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-lg font-semibold">Weekly Working Hours</h2>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Default: {HOUR_DAYS.map(([f]) => person[f]).join(' / ')} ({weeklyHours}h/week). Add overrides for weeks that differ.
+            </p>
+          </div>
+          <button onClick={openAddHours} className="btn-primary text-sm">+ Add week override</button>
+        </div>
+        {schedules.length === 0 ? (
+          <p className="text-gray-500 text-sm">No week overrides — every week uses the default schedule.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-gray-500 uppercase border-b">
+                  <th className="py-2 pr-4">Week of</th>
+                  {HOUR_DAYS.map(([f, label]) => <th key={f} className="py-2 px-2 text-center">{label}</th>)}
+                  <th className="py-2 px-2 text-center">Total</th>
+                  <th className="py-2 pl-2"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {schedules.map((s) => {
+                  const total = HOUR_DAYS.reduce((sum, [f]) => sum + s[f], 0);
+                  return (
+                    <tr key={s.id} className="border-b last:border-0">
+                      <td className="py-2 pr-4 font-medium">{formatDateDisplay(s.weekStart)}</td>
+                      {HOUR_DAYS.map(([f]) => (
+                        <td key={f} className={`py-2 px-2 text-center ${s[f] === 0 ? 'text-gray-300' : 'text-gray-700'}`}>{s[f]}</td>
+                      ))}
+                      <td className="py-2 px-2 text-center font-semibold">{Math.round(total * 10) / 10}h</td>
+                      <td className="py-2 pl-2 text-right whitespace-nowrap">
+                        <button onClick={() => openEditHours(s)} className="text-xs text-primary-600 hover:text-primary-700 mr-3">Edit</button>
+                        <button onClick={() => handleDeleteHours(s)} className="text-xs text-red-500 hover:text-red-700">✕</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Weekly Hours Modal */}
+      <Modal isOpen={showHoursModal} onClose={() => setShowHoursModal(false)} title="Week Override">
+        <form onSubmit={handleSaveHours} className="space-y-4">
+          <div>
+            <label className="label">Week (any day in the target week) *</label>
+            <input
+              type="date"
+              className="input"
+              value={hoursForm.weekStart}
+              onChange={(e) => setHoursForm(f => ({ ...f, weekStart: mondayOf(e.target.value) }))}
+              required
+            />
+            <p className="text-xs text-gray-400 mt-1">Saved against the Monday of the chosen week. Set a day to 0 if not worked.</p>
+          </div>
+          <div className="grid grid-cols-5 gap-2">
+            {HOUR_DAYS.map(([f, label]) => (
+              <div key={f}>
+                <label className="block text-xs font-medium text-gray-500 text-center mb-1">{label}</label>
+                <input
+                  type="number" min="0" max="24" step="0.5"
+                  className="input text-sm text-center px-1"
+                  value={hoursForm[f]}
+                  onChange={(e) => setHoursForm(prev => ({ ...prev, [f]: e.target.value }))}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="text-right text-sm text-gray-600">
+            Week total: {Math.round(HOUR_DAYS.reduce((sum, [f]) => sum + (parseFloat(hoursForm[f]) || 0), 0) * 10) / 10}h
+          </div>
+          <div className="flex justify-end gap-3 pt-4">
+            <button type="button" onClick={() => setShowHoursModal(false)} className="btn-secondary">Cancel</button>
+            <button type="submit" className="btn-primary">Save Override</button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Allocation Modal */}
       <Modal isOpen={showAllocationModal} onClose={() => setShowAllocationModal(false)} title="Add Allocation">
