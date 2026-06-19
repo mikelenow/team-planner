@@ -43,6 +43,20 @@ function getAllocationForDate(allocations, date) {
     .reduce((sum, a) => sum + a.percentage, 0);
 }
 
+function getAllocationsByProjectForDate(allocations, date) {
+  const dateStr = format(date, 'yyyy-MM-dd');
+  const result = {};
+  for (const a of allocations) {
+    const start = format(new Date(a.startDate), 'yyyy-MM-dd');
+    const end = format(new Date(a.endDate), 'yyyy-MM-dd');
+    if (dateStr >= start && dateStr <= end) {
+      const key = a.project?.code || a.projectId;
+      result[key] = (result[key] || 0) + a.percentage;
+    }
+  }
+  return result;
+}
+
 // GET /api/utilization?startDate=2026-01-01&endDate=2026-01-31&personId=...&teamId=...&roleId=...
 router.get('/', async (req, res) => {
   try {
@@ -165,6 +179,7 @@ router.get('/', async (req, res) => {
 
         const availableHours = baseHours - absenceHours;
         const allocationPct = getAllocationForDate(personAllocations, day);
+        const plannedByProject = getAllocationsByProjectForDate(personAllocations, day);
         const allocatedHours = (allocationPct / 100) * baseHours;
 
         totalAvailableHours += availableHours;
@@ -192,6 +207,7 @@ router.get('/', async (req, res) => {
           utilization: Math.round(utilization * 10) / 10,
           overallocated: utilization > 100,
           allocationPct,
+          plannedByProject,
         };
       });
 

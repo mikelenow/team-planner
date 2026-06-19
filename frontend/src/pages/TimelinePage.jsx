@@ -511,17 +511,29 @@ export default function TimelinePage() {
                           <div className="mt-0.5">
                             {(dayData.actualByProject?.length || 0) > 0 ? (
                               <div className="space-y-px">
-                                {dayData.actualByProject.map((p, i) => (
-                                  <div key={i} className="flex items-center gap-0.5 text-[9px] leading-tight">
-                                    <span
-                                      className="w-1.5 h-1.5 rounded-sm flex-shrink-0"
-                                      style={{ backgroundColor: ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#EC4899','#06B6D4','#84CC16'][i % 8] }}
-                                    />
-                                    <span className="text-gray-500 truncate">{p.project}</span>
-                                    <span className="text-purple-600 font-medium ml-auto">{p.hours}</span>
-                                    <span className="text-gray-400">{dayData.available > 0 ? Math.round((p.hours / dayData.available) * 100) : 0}%</span>
-                                  </div>
-                                ))}
+                                {dayData.actualByProject.map((p, i) => {
+                                  const actualPct = dayData.available > 0 ? Math.round((p.hours / dayData.available) * 100) : 0;
+                                  const plannedPct = dayData.plannedByProject?.[p.project] || 0;
+                                  const diff = actualPct - plannedPct;
+                                  return (
+                                    <div key={i} className="flex items-center gap-0.5 text-[9px] leading-tight">
+                                      <span
+                                        className="w-1.5 h-1.5 rounded-sm flex-shrink-0"
+                                        style={{ backgroundColor: ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#EC4899','#06B6D4','#84CC16'][i % 8] }}
+                                      />
+                                      <span className="text-gray-500 truncate">{p.project}</span>
+                                      <span className="text-purple-600 font-medium ml-auto">{actualPct}%</span>
+                                      {plannedPct > 0 && diff !== 0 && (
+                                        <span className={`${diff > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                          {diff > 0 ? '+' : ''}{diff}
+                                        </span>
+                                      )}
+                                      {plannedPct === 0 && (
+                                        <span className="text-orange-400">!</span>
+                                      )}
+                                    </div>
+                                  );
+                                })}
                               </div>
                             ) : (
                               <div className="text-[10px] text-purple-600 font-medium leading-none text-center">{dayData.actual}h</div>
