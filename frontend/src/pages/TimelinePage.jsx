@@ -516,20 +516,19 @@ export default function TimelinePage() {
                                   const plannedPct = dayData.plannedByProject?.[p.project] || 0;
                                   const diff = actualPct - plannedPct;
                                   return (
-                                    <div key={i} className="flex items-center gap-0.5 text-[9px] leading-tight">
+                                    <div key={i} className="text-[9px] leading-tight flex items-center gap-0.5" title={`${p.project}: ${p.hours}h (${actualPct}% actual, ${plannedPct}% planned)`}>
                                       <span
                                         className="w-1.5 h-1.5 rounded-sm flex-shrink-0"
                                         style={{ backgroundColor: ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#EC4899','#06B6D4','#84CC16'][i % 8] }}
                                       />
-                                      <span className="text-gray-500 truncate">{p.project}</span>
-                                      <span className="text-purple-600 font-medium ml-auto">{actualPct}%</span>
+                                      <span className="text-gray-600">{p.project}</span>
                                       {plannedPct > 0 && diff !== 0 && (
-                                        <span className={`${diff > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                        <span className={`font-medium ${diff > 0 ? 'text-green-600' : 'text-red-500'}`}>
                                           {diff > 0 ? '+' : ''}{diff}
                                         </span>
                                       )}
                                       {plannedPct === 0 && (
-                                        <span className="text-orange-400">!</span>
+                                        <span className="text-orange-400 font-medium">!</span>
                                       )}
                                     </div>
                                   );
