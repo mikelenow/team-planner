@@ -522,6 +522,7 @@ export default function TimelinePage() {
                                         style={{ backgroundColor: ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#EC4899','#06B6D4','#84CC16'][i % 8] }}
                                       />
                                       <span className="text-gray-600">{p.project}</span>
+                                      <span className="text-purple-600 font-medium">{actualPct}%</span>
                                       {plannedPct > 0 && diff !== 0 && (
                                         <span className={`font-medium ${diff > 0 ? 'text-green-600' : 'text-red-500'}`}>
                                           {diff > 0 ? '+' : ''}{diff}
