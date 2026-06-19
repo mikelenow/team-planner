@@ -12,6 +12,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 - **Multi-day absences from Timeline**: The absence form on the Timeline cell modal now supports date ranges (start/end date) instead of single-day only. Date fields appear after selecting an absence type, pre-filled with the clicked date. End date auto-adjusts if set before start date.
 - **Multiple project codes**: Projects can now have additional codes beyond the primary one (e.g. PNEU + PSD for Pneuhage). Additional codes are used for Tempo worklog matching — worklogs from any of the codes map to the same project. Comma-separated input on the project form.
+- **Faster Tempo sync with caching**: Jira user profiles and issue keys are now cached in the DB (`JiraCache` table). Re-syncs skip Jira API calls for already-known users/issues. Unchanged worklogs are detected and skipped. Jira user lookups run in parallel (batches of 10).
+- **Auto-load report on period change**: Switching between This Week / This Month / Custom now automatically loads the report from cached data — no need to click "Load Report" or sync first.
 
 - **Per-week working hours (weekly schedule overrides)**: People who change which days/hours they work week to week can now have a per-week override of their daily hours. A person keeps default `hoursMonday`–`hoursFriday`, but any week can override them (set a day to `0` to mark it as not worked).
   - New `WeeklySchedule` model (`personId` + `weekStart` Monday + the five day-hour fields), with `@@unique([personId, weekStart])`. Migration `add_weekly_schedule`.

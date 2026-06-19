@@ -255,3 +255,14 @@ model TempoWorklog {
   @@index([personId, date])
   @@index([projectId, date])
 }
+
+// Cached Jira entity lookups (users and issues) to avoid repeated API calls
+model JiraCache {
+  key       String   @id        // e.g. "user:abc123" or "issue:998667"
+  type      String               // "user" or "issue"
+  data      String               // JSON blob
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([type])
+}

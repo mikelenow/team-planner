@@ -58,11 +58,16 @@ class TempoService {
   }
 
   /**
-   * Fetch Jira user details by account ID.
-   * Returns { accountId, displayName, emailAddress } or null.
+   * Fetch Jira user details by account ID (with DB cache).
    */
   async fetchJiraUser(accountId) {
     if (!this.jiraBaseUrl || !this.jiraEmail || !this.jiraApiToken) return null;
+
+    // Check cache first
+    const cacheKey = `user:${accountId}`;
+    const cached = await prisma.jiraCache.findUnique({ where: { key: cacheKey } }).catch(() => null);
+    if (cached) return JSON.parse(cached.data);
+
     try {
       const url = `${this.jiraBaseUrl}/rest/api/3/user?accountId=${encodeURIComponent(accountId)}`;
       const auth = Buffer.from(`${this.jiraEmail}:${this.jiraApiToken}`).toString('base64');
@@ -74,26 +79,60 @@ class TempoService {
       });
       if (!response.ok) return null;
       const data = await response.json();
-      return {
+      const result = {
         accountId: data.accountId,
         displayName: data.displayName || '',
         emailAddress: data.emailAddress || '',
       };
+      // Cache it
+      await prisma.jiraCache.upsert({
+        where: { key: cacheKey },
+        update: { data: JSON.stringify(result) },
+        create: { key: cacheKey, type: 'user', data: JSON.stringify(result) },
+      }).catch(() => {});
+      return result;
     } catch {
       return null;
     }
   }
 
   /**
-   * Fetch Jira user details for multiple account IDs (with caching).
-   * Returns Map<accountId, { displayName, emailAddress }>.
+   * Fetch Jira user details for multiple account IDs.
+   * Uses cache + parallel requests (batches of 10).
    */
   async fetchJiraUsers(accountIds) {
     const users = new Map();
+    const uncached = [];
+
+    // Check cache for all IDs
+    const cacheKeys = accountIds.filter(Boolean).map(id => `user:${id}`);
+    if (cacheKeys.length > 0) {
+      const cachedRows = await prisma.jiraCache.findMany({
+        where: { key: { in: cacheKeys } },
+      });
+      for (const row of cachedRows) {
+        const id = row.key.replace('user:', '');
+        users.set(id, JSON.parse(row.data));
+      }
+    }
+
+    // Find uncached IDs
     for (const id of accountIds) {
-      if (!id || users.has(id)) continue;
-      const user = await this.fetchJiraUser(id);
-      if (user) users.set(id, user);
+      if (id && !users.has(id)) uncached.push(id);
+    }
+
+    // Fetch uncached in parallel batches of 10
+    const batchSize = 10;
+    for (let i = 0; i < uncached.length; i += batchSize) {
+      const batch = uncached.slice(i, i + batchSize);
+      const results = await Promise.allSettled(
+        batch.map(id => this.fetchJiraUser(id))
+      );
+      results.forEach((r, idx) => {
+        if (r.status === 'fulfilled' && r.value) {
+          users.set(batch[idx], r.value);
+        }
+      });
     }
     return users;
   }
@@ -123,39 +162,58 @@ class TempoService {
 
   /**
    * Fetch Jira issue keys for multiple issue IDs using JQL bulk search.
-   * Returns Map<issueId, issueKey>.
+   * Uses DB cache for known issues. Returns Map<issueId, issueKey>.
    */
   async fetchJiraIssueKeys(issueIds) {
     const keys = new Map();
     if (!this.jiraBaseUrl || !this.jiraEmail || !this.jiraApiToken || issueIds.length === 0) return keys;
-    const auth = Buffer.from(`${this.jiraEmail}:${this.jiraApiToken}`).toString('base64');
-    this._jiraErrors = [];
+    this._jiraErrors = this._jiraErrors || [];
 
-    // Process in batches of 100 (Jira JQL limit)
+    // Check cache first
+    const stringIds = issueIds.filter(Boolean).map(String);
+    const cacheKeys = stringIds.map(id => `issue:${id}`);
+    if (cacheKeys.length > 0) {
+      const cachedRows = await prisma.jiraCache.findMany({ where: { key: { in: cacheKeys } } });
+      for (const row of cachedRows) {
+        const id = row.key.replace('issue:', '');
+        keys.set(id, JSON.parse(row.data).key);
+      }
+    }
+
+    // Find uncached IDs
+    const uncachedIds = stringIds.filter(id => !keys.has(id));
+    if (uncachedIds.length === 0) return keys;
+
+    const auth = Buffer.from(`${this.jiraEmail}:${this.jiraApiToken}`).toString('base64');
+
+    // Fetch uncached in batches of 100 via JQL
     const batchSize = 100;
-    for (let i = 0; i < issueIds.length; i += batchSize) {
-      const batch = issueIds.slice(i, i + batchSize);
+    for (let i = 0; i < uncachedIds.length; i += batchSize) {
+      const batch = uncachedIds.slice(i, i + batchSize);
       try {
         const jql = `id in (${batch.join(',')})`;
         const url = `${this.jiraBaseUrl}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&fields=key&maxResults=${batchSize}`;
         const response = await fetch(url, {
-          headers: {
-            'Authorization': `Basic ${auth}`,
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Authorization': `Basic ${auth}`, 'Content-Type': 'application/json' },
         });
         if (!response.ok) {
           const errText = await response.text();
-          console.error(`Jira search failed (batch ${i}):`, response.status, errText);
           this._jiraErrors.push(`Batch ${i}: ${response.status} - ${errText.slice(0, 200)}`);
           continue;
         }
         const data = await response.json();
+        const cacheOps = [];
         for (const issue of (data.issues || [])) {
-          keys.set(String(issue.id), issue.key);
+          const id = String(issue.id);
+          keys.set(id, issue.key);
+          cacheOps.push(prisma.jiraCache.upsert({
+            where: { key: `issue:${id}` },
+            update: { data: JSON.stringify({ key: issue.key }) },
+            create: { key: `issue:${id}`, type: 'issue', data: JSON.stringify({ key: issue.key }) },
+          }));
         }
+        if (cacheOps.length > 0) await prisma.$transaction(cacheOps).catch(() => {});
       } catch (err) {
-        console.error(`Jira search error (batch ${i}):`, err.message);
         this._jiraErrors.push(`Batch ${i}: ${err.message}`);
       }
     }
@@ -266,9 +324,18 @@ class TempoService {
       if (p.codes) p.codes.forEach(c => projectByKey.set(c.code.toUpperCase(), p.id));
     });
 
-    // Upsert worklogs
+    // Pre-fetch existing worklogs for this period to detect changes
+    const existingWorklogs = await prisma.tempoWorklog.findMany({
+      where: { date: { gte: new Date(from), lte: new Date(to) } },
+      select: { tempoWorklogId: true, timeSpentHours: true, personId: true, projectId: true },
+    });
+    const existingByTempoId = new Map(existingWorklogs.map(w => [w.tempoWorklogId, w]));
+
+    // Upsert worklogs — skip unchanged, batch person updates
     let synced = 0;
+    let skipped = 0;
     let unmatched = 0;
+    const personUpdates = new Map(); // jiraAccountId -> personId (for batch update)
 
     for (const wl of worklogs) {
       const tempoWorklogId = wl.tempoWorklogId || wl.id;
@@ -294,13 +361,10 @@ class TempoService {
         personId = personByName.get(normalizeName(jiraDisplayName)) || null;
       }
 
-      // Auto-populate jiraAccountId on successful match for future syncs
+      // Queue jiraAccountId auto-populate
       if (personId && jiraAccountId && !personByAccountId.has(jiraAccountId)) {
         personByAccountId.set(jiraAccountId, personId);
-        await prisma.person.update({
-          where: { id: personId },
-          data: { jiraAccountId },
-        }).catch(() => {});
+        personUpdates.set(jiraAccountId, personId);
       }
 
       // Match project
@@ -308,6 +372,14 @@ class TempoService {
 
       if (!personId && !projectId) {
         unmatched++;
+      }
+
+      // Skip if worklog exists and nothing changed
+      const existing = existingByTempoId.get(tempoWorklogId);
+      if (existing && existing.timeSpentHours === timeSpentHours
+          && existing.personId === personId && existing.projectId === projectId) {
+        skipped++;
+        continue;
       }
 
       await prisma.tempoWorklog.upsert({
@@ -342,6 +414,14 @@ class TempoService {
       synced++;
     }
 
+    // Batch update person jiraAccountIds
+    for (const [accountId, personId] of personUpdates) {
+      await prisma.person.update({
+        where: { id: personId },
+        data: { jiraAccountId: accountId },
+      }).catch(() => {});
+    }
+
     // Update last sync time
     await prisma.tempoConfig.updateMany({
       where: { isActive: true },
@@ -350,6 +430,7 @@ class TempoService {
 
     return {
       synced,
+      skipped,
       unmatched,
       total: worklogs.length,
       jiraUsersResolved: jiraUsers.size,

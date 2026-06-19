@@ -30,6 +30,12 @@ export default function TempoPage() {
 
   useEffect(() => { loadConfig(); }, []);
 
+  // Auto-load report when period changes
+  useEffect(() => {
+    const { from, to } = getDateRange();
+    if (from && to) loadReport();
+  }, [period, customFrom, customTo]);
+
   const loadConfig = async () => {
     try {
       const res = await api.get('/tempo/config');
