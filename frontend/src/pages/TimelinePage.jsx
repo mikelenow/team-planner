@@ -556,6 +556,9 @@ export default function TimelinePage() {
                     {showActuals && item.summary.totalActualHours > 0 && (
                       <div className="text-[10px] text-purple-600 font-medium mt-1">
                         ⏱ {item.summary.totalActualHours}h
+                        <span className="text-gray-500 ml-0.5">
+                          ({item.summary.totalAvailableHours > 0 ? Math.round((item.summary.totalActualHours / item.summary.totalAvailableHours) * 100) : 0}%)
+                        </span>
                       </div>
                     )}
                   </td>
