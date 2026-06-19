@@ -68,7 +68,8 @@ router.get('/', async (req, res) => {
     });
 
     // Fetch all relevant data
-    const [allocations, absences, holidays, schedules, tempoWorklogs] = await Promise.all([
+    let schedules = [];
+    const [allocations, absences, holidays] = await Promise.all([
       prisma.allocation.findMany({
         where: {
           startDate: { lte: end },
@@ -88,20 +89,33 @@ router.get('/', async (req, res) => {
       prisma.publicHoliday.findMany({
         where: { date: { gte: start, lte: end } },
       }),
-      prisma.weeklySchedule.findMany({
+    ]);
+
+    // Fetch weekly schedules (non-blocking if table doesn't exist yet)
+    try {
+      schedules = await prisma.weeklySchedule.findMany({
         where: {
           personId: { in: people.map(p => p.id) },
           weekStart: { gte: startOfWeek(start, { weekStartsOn: 1 }), lte: end },
         },
-      }),
-      prisma.tempoWorklog.findMany({
+      });
+    } catch (err) {
+      console.error('Failed to fetch weekly schedules:', err.message);
+    }
+
+    // Fetch tempo worklogs separately (non-blocking if table doesn't exist yet)
+    let tempoWorklogs = [];
+    try {
+      tempoWorklogs = await prisma.tempoWorklog.findMany({
         where: {
           date: { gte: start, lte: end },
           personId: { in: people.map(p => p.id) },
         },
         select: { personId: true, date: true, timeSpentHours: true },
-      }),
-    ]);
+      });
+    } catch (err) {
+      console.error('Failed to fetch tempo worklogs for timeline:', err.message);
+    }
 
     const scheduleLookup = buildScheduleLookup(schedules);
 
