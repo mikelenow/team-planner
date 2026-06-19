@@ -17,6 +17,7 @@ export default function TimelinePage() {
   const [viewMode, setViewMode] = useState('week');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [filters, setFilters] = useState({ roleId: '', teamId: '' });
+  const [showActuals, setShowActuals] = useState(false);
 
   // Cell editing state
   const [editingCell, setEditingCell] = useState(null);
@@ -392,6 +393,13 @@ export default function TimelinePage() {
           <option value="">All Teams</option>
           {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
         </select>
+
+        <button
+          onClick={() => setShowActuals(v => !v)}
+          className={`text-sm px-3 py-1.5 rounded-md transition-colors ${showActuals ? 'bg-purple-100 text-purple-700 font-medium' : 'bg-gray-100 text-gray-600 hover:text-gray-900'}`}
+        >
+          ⏱ Actuals
+        </button>
       </div>
 
       {/* Legend */}
@@ -492,14 +500,14 @@ export default function TimelinePage() {
                     return (
                       <td key={dateStr} className={`px-1 py-2 text-center ${isToday(day) ? 'bg-primary-50/50' : ''}`}>
                         <div
-                          className={`${dayData.actual > 0 ? 'h-6' : 'h-8'} flex items-center justify-center rounded text-xs font-medium ${isEditor ? 'cursor-pointer hover:ring-2 hover:ring-primary-300 transition-shadow' : ''}`}
+                          className={`${showActuals && dayData.actual > 0 ? 'h-6' : 'h-8'} flex items-center justify-center rounded text-xs font-medium ${isEditor ? 'cursor-pointer hover:ring-2 hover:ring-primary-300 transition-shadow' : ''}`}
                           style={{ backgroundColor: getUtilizationBgColor(dayData.allocationPct) }}
                           title={`${dayData.allocationPct}% allocated (${dayData.allocated}h / ${dayData.available}h available)${dayData.actual ? ` • Actual: ${dayData.actual}h` : ''}${isEditor ? ' — Click to edit' : ''}`}
                           onClick={() => handleCellClick(item, dateStr)}
                         >
                           {dayData.allocationPct > 0 ? `${dayData.allocationPct}%` : ''}
                         </div>
-                        {dayData.actual > 0 && (
+                        {showActuals && dayData.actual > 0 && (
                           <div
                             className="mt-0.5"
                             title={`Tempo: ${dayData.actual}h\n${(dayData.actualByProject || []).map(p => `  ${p.project}: ${p.hours}h`).join('\n')}`}
@@ -535,7 +543,7 @@ export default function TimelinePage() {
                       {item.summary.utilization}%
                       {item.summary.overallocated && ' ⚠️'}
                     </span>
-                    {item.summary.totalActualHours > 0 && (
+                    {showActuals && item.summary.totalActualHours > 0 && (
                       <div className="text-[10px] text-purple-600 font-medium mt-1">
                         ⏱ {item.summary.totalActualHours}h
                       </div>
