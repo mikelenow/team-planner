@@ -500,8 +500,11 @@ export default function TimelinePage() {
                           {dayData.allocationPct > 0 ? `${dayData.allocationPct}%` : ''}
                         </div>
                         {dayData.actual > 0 && (
-                          <div className="text-[10px] text-purple-600 font-medium mt-0.5 leading-none" title={`Tempo: ${dayData.actual}h logged`}>
+                          <div className="text-[10px] text-purple-600 font-medium mt-0.5 leading-none" title={`Tempo: ${dayData.actual}h — ${dayData.actualProjects?.join(', ') || '?'}`}>
                             {dayData.actual}h
+                            {dayData.actualProjects?.length > 0 && (
+                              <span className="text-purple-400 ml-0.5">{dayData.actualProjects.join(',')}</span>
+                            )}
                           </div>
                         )}
                       </td>
