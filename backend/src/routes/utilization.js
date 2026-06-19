@@ -227,7 +227,7 @@ router.get('/', async (req, res) => {
     });
   } catch (err) {
     console.error('Utilization error:', err);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: err.message, stack: err.stack?.split('\n').slice(0, 5) });
   }
 });
 
