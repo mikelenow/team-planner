@@ -500,7 +500,7 @@ export default function TimelinePage() {
                     return (
                       <td key={dateStr} className={`px-1 py-2 text-center ${isToday(day) ? 'bg-primary-50/50' : ''}`}>
                         <div
-                          className={`${showActuals && dayData.actual > 0 ? 'h-6' : 'h-8'} flex items-center justify-center rounded text-xs font-medium ${isEditor ? 'cursor-pointer hover:ring-2 hover:ring-primary-300 transition-shadow' : ''}`}
+                          className={`${showActuals && dayData.actual > 0 ? 'h-5' : 'h-8'} flex items-center justify-center rounded text-xs font-medium ${isEditor ? 'cursor-pointer hover:ring-2 hover:ring-primary-300 transition-shadow' : ''}`}
                           style={{ backgroundColor: getUtilizationBgColor(dayData.allocationPct) }}
                           title={`${dayData.allocationPct}% allocated (${dayData.allocated}h / ${dayData.available}h available)${dayData.actual ? ` • Actual: ${dayData.actual}h` : ''}${isEditor ? ' — Click to edit' : ''}`}
                           onClick={() => handleCellClick(item, dateStr)}
@@ -508,25 +508,22 @@ export default function TimelinePage() {
                           {dayData.allocationPct > 0 ? `${dayData.allocationPct}%` : ''}
                         </div>
                         {showActuals && dayData.actual > 0 && (
-                          <div
-                            className="mt-0.5"
-                            title={`Tempo: ${dayData.actual}h\n${(dayData.actualByProject || []).map(p => `  ${p.project}: ${p.hours}h`).join('\n')}`}
-                          >
-                            <div className="text-[10px] text-purple-600 font-medium leading-none text-center">{dayData.actual}h</div>
-                            {(dayData.actualByProject?.length || 0) > 0 && (
-                              <div className="flex h-1 rounded-full overflow-hidden mt-0.5 mx-0.5">
+                          <div className="mt-0.5">
+                            {(dayData.actualByProject?.length || 0) > 0 ? (
+                              <div className="space-y-px">
                                 {dayData.actualByProject.map((p, i) => (
-                                  <div
-                                    key={i}
-                                    className="h-full"
-                                    style={{
-                                      width: `${(p.hours / dayData.actual) * 100}%`,
-                                      backgroundColor: ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#EC4899','#06B6D4','#84CC16'][i % 8],
-                                    }}
-                                    title={`${p.project}: ${p.hours}h`}
-                                  />
+                                  <div key={i} className="flex items-center gap-0.5 text-[9px] leading-tight">
+                                    <span
+                                      className="w-1.5 h-1.5 rounded-sm flex-shrink-0"
+                                      style={{ backgroundColor: ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#EC4899','#06B6D4','#84CC16'][i % 8] }}
+                                    />
+                                    <span className="text-gray-500 truncate">{p.project}</span>
+                                    <span className="text-purple-600 font-medium ml-auto">{p.hours}</span>
+                                  </div>
                                 ))}
                               </div>
+                            ) : (
+                              <div className="text-[10px] text-purple-600 font-medium leading-none text-center">{dayData.actual}h</div>
                             )}
                           </div>
                         )}
