@@ -71,8 +71,8 @@ export default function TimelinePage() {
     return { start, end };
   };
 
-  const loadUtilization = async () => {
-    setLoading(true);
+  const loadUtilization = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const { start, end } = getDateRange();
       const params = new URLSearchParams({
@@ -85,7 +85,7 @@ export default function TimelinePage() {
       const res = await api.get(`/utilization?${params}`);
       setUtilization(res.data.people || []);
     } catch (err) {
-      toast.error('Failed to load utilization data');
+      if (!silent) toast.error('Failed to load utilization data');
     } finally {
       setLoading(false);
     }
@@ -202,7 +202,7 @@ export default function TimelinePage() {
       }
       toast.success('Week allocations saved');
       setShowWeekModal(false);
-      loadUtilization();
+      loadUtilization(true);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save');
     }
@@ -259,7 +259,7 @@ export default function TimelinePage() {
       });
       toast.success('Weekly hours saved');
       setShowHoursModal(false);
-      loadUtilization();
+      loadUtilization(true);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save hours');
     }
@@ -270,7 +270,7 @@ export default function TimelinePage() {
       await api.delete('/schedules', { params: { personId: hoursEditPerson.id, weekStart: hoursEditPerson.weekStart } });
       toast.success('Reset to default hours');
       setShowHoursModal(false);
-      loadUtilization();
+      loadUtilization(true);
     } catch (err) {
       toast.error('Failed to reset');
     }
@@ -282,39 +282,32 @@ export default function TimelinePage() {
 
   const handleSaveCellAllocations = async () => {
     try {
-      for (const alloc of cellAllocations) {
-        if (!alloc.projectId || !alloc.percentage) continue;
+      const allocsToSave = cellAllocations
+        .filter(alloc => alloc.projectId && alloc.percentage)
+        .map(alloc => ({
+          id: alloc.id || undefined,
+          projectId: alloc.projectId,
+          percentage: parseFloat(alloc.percentage),
+          startDate: alloc.startDate || editingCell.date,
+          endDate: alloc.endDate || editingCell.date,
+        }));
 
-        if (alloc.id) {
-          await api.put(`/allocations/${alloc.id}`, {
-            percentage: parseFloat(alloc.percentage),
-            startDate: alloc.startDate,
-            endDate: alloc.endDate,
-          });
-        } else {
-          await api.post('/allocations', {
-            personId: editingCell.personId,
-            projectId: alloc.projectId,
-            percentage: parseFloat(alloc.percentage),
-            startDate: alloc.startDate || editingCell.date,
-            endDate: alloc.endDate || editingCell.date,
-          });
-        }
-      }
+      const absence = cellAbsence.absenceTypeId ? {
+        absenceTypeId: cellAbsence.absenceTypeId,
+        startDate: cellAbsence.startDate || editingCell.date,
+        endDate: cellAbsence.endDate || cellAbsence.startDate || editingCell.date,
+        isHalfDay: cellAbsence.isHalfDay,
+      } : undefined;
 
-      if (cellAbsence.absenceTypeId) {
-        await api.post('/absences', {
-          personId: editingCell.personId,
-          absenceTypeId: cellAbsence.absenceTypeId,
-          startDate: cellAbsence.startDate || editingCell.date,
-          endDate: cellAbsence.endDate || cellAbsence.startDate || editingCell.date,
-          isHalfDay: cellAbsence.isHalfDay,
-        });
-      }
+      await api.post('/allocations/bulk', {
+        personId: editingCell.personId,
+        allocations: allocsToSave,
+        absence,
+      });
 
       toast.success('Saved');
       setShowCellModal(false);
-      loadUtilization();
+      loadUtilization(true);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to save');
     }
@@ -326,7 +319,7 @@ export default function TimelinePage() {
       await api.delete(`/allocations/${allocId}`);
       setCellAllocations(prev => prev.filter(a => a.id !== allocId));
       toast.success('Allocation removed');
-      loadUtilization();
+      loadUtilization(true);
     } catch (err) {
       toast.error('Failed to remove');
     }

@@ -139,4 +139,60 @@ router.delete('/:id', requireEditor, async (req, res) => {
   }
 });
 
+// POST /api/allocations/bulk - Save multiple allocations + absence in one request
+router.post('/bulk', requireEditor, async (req, res) => {
+  try {
+    const { personId, allocations = [], absence } = req.body;
+    if (!personId) return res.status(400).json({ error: 'personId is required' });
+
+    const results = [];
+
+    // Process allocations
+    for (const alloc of allocations) {
+      if (!alloc.projectId || !alloc.percentage) continue;
+      if (alloc.id) {
+        // Update existing
+        const updated = await prisma.allocation.update({
+          where: { id: alloc.id },
+          data: {
+            percentage: parseFloat(alloc.percentage),
+            startDate: new Date(alloc.startDate),
+            endDate: new Date(alloc.endDate),
+          },
+        });
+        results.push(updated);
+      } else {
+        // Create new
+        const created = await prisma.allocation.create({
+          data: {
+            personId,
+            projectId: alloc.projectId,
+            percentage: parseFloat(alloc.percentage),
+            startDate: new Date(alloc.startDate),
+            endDate: new Date(alloc.endDate),
+          },
+        });
+        results.push(created);
+      }
+    }
+
+    // Process absence
+    if (absence?.absenceTypeId) {
+      await prisma.absence.create({
+        data: {
+          personId,
+          absenceTypeId: absence.absenceTypeId,
+          startDate: new Date(absence.startDate),
+          endDate: new Date(absence.endDate),
+          isHalfDay: absence.isHalfDay || false,
+        },
+      });
+    }
+
+    res.status(201).json({ saved: results.length });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
