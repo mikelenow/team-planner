@@ -68,7 +68,7 @@ router.get('/', async (req, res) => {
     });
 
     // Fetch all relevant data
-    const [allocations, absences, holidays, schedules] = await Promise.all([
+    const [allocations, absences, holidays, schedules, tempoWorklogs] = await Promise.all([
       prisma.allocation.findMany({
         where: {
           startDate: { lte: end },
@@ -94,9 +94,23 @@ router.get('/', async (req, res) => {
           weekStart: { gte: startOfWeek(start, { weekStartsOn: 1 }), lte: end },
         },
       }),
+      prisma.tempoWorklog.findMany({
+        where: {
+          date: { gte: start, lte: end },
+          personId: { in: people.map(p => p.id) },
+        },
+        select: { personId: true, date: true, timeSpentHours: true },
+      }),
     ]);
 
     const scheduleLookup = buildScheduleLookup(schedules);
+
+    // Build tempo worklog lookup: personId|date -> totalHours
+    const tempoByPersonDate = new Map();
+    for (const wl of tempoWorklogs) {
+      const key = `${wl.personId}|${format(new Date(wl.date), 'yyyy-MM-dd')}`;
+      tempoByPersonDate.set(key, (tempoByPersonDate.get(key) || 0) + wl.timeSpentHours);
+    }
 
     // Calculate utilization for each person
     const days = eachDayOfInterval({ start, end });
@@ -107,6 +121,7 @@ router.get('/', async (req, res) => {
       let totalAvailableHours = 0;
       let totalAllocatedHours = 0;
       let totalAbsenceHours = 0;
+      let totalActualHours = 0;
 
       const dailyData = days.map(day => {
         const baseHours = getDailyHours(person, day, scheduleLookup);
@@ -134,13 +149,18 @@ router.get('/', async (req, res) => {
         totalAvailableHours += availableHours;
         totalAllocatedHours += allocatedHours;
         totalAbsenceHours += absenceHours;
+        totalActualHours += actualHours;
 
         const utilization = availableHours > 0 ? (allocatedHours / availableHours) * 100 : 0;
 
+        const dateStr = format(day, 'yyyy-MM-dd');
+        const actualHours = tempoByPersonDate.get(`${person.id}|${dateStr}`) || 0;
+
         return {
-          date: format(day, 'yyyy-MM-dd'),
+          date: dateStr,
           available: availableHours,
           allocated: allocatedHours,
+          actual: Math.round(actualHours * 10) / 10,
           absence: absenceHours,
           absenceType: absence?.absenceType?.name || null,
           holiday: false,
@@ -172,6 +192,7 @@ router.get('/', async (req, res) => {
           totalAvailableHours: Math.round(totalAvailableHours * 10) / 10,
           totalAllocatedHours: Math.round(totalAllocatedHours * 10) / 10,
           totalAbsenceHours: Math.round(totalAbsenceHours * 10) / 10,
+          totalActualHours: Math.round(totalActualHours * 10) / 10,
           utilization: overallUtilization,
           overallocated: overallUtilization > 100,
         },
