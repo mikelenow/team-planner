@@ -519,6 +519,7 @@ export default function TimelinePage() {
                                     />
                                     <span className="text-gray-500 truncate">{p.project}</span>
                                     <span className="text-purple-600 font-medium ml-auto">{p.hours}</span>
+                                    <span className="text-gray-400">{dayData.available > 0 ? Math.round((p.hours / dayData.available) * 100) : 0}%</span>
                                   </div>
                                 ))}
                               </div>
