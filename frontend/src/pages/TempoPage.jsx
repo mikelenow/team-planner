@@ -16,6 +16,9 @@ export default function TempoPage() {
   const [sampleRaw, setSampleRaw] = useState(null);
   const [syncStats, setSyncStats] = useState(null);
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [teams, setTeams] = useState([]);
+  const [people, setPeople] = useState([]);
+  const [syncFilter, setSyncFilter] = useState({ teamId: '', personId: '' });
   const [period, setPeriod] = useState('month'); // week | month | custom
   const [customFrom, setCustomFrom] = useState('');
   const [customTo, setCustomTo] = useState('');
@@ -28,7 +31,7 @@ export default function TempoPage() {
     jiraApiToken: '',
   });
 
-  useEffect(() => { loadConfig(); }, []);
+  useEffect(() => { loadConfig(); loadTeamsAndPeople(); }, []);
 
   // Auto-load report when period changes
   useEffect(() => {
@@ -42,6 +45,19 @@ export default function TempoPage() {
       setConfig(res.data);
     } catch (err) {
       // Not configured yet
+    }
+  };
+
+  const loadTeamsAndPeople = async () => {
+    try {
+      const [teamsRes, peopleRes] = await Promise.all([
+        api.get('/teams'),
+        api.get('/people?isActive=true'),
+      ]);
+      setTeams(teamsRes.data);
+      setPeople(peopleRes.data);
+    } catch (err) {
+      // non-critical
     }
   };
 
@@ -69,7 +85,10 @@ export default function TempoPage() {
     }
     setSyncing(true);
     try {
-      const res = await api.post('/tempo/sync', { from, to });
+      const syncBody = { from, to };
+      if (syncFilter.personId) syncBody.personId = syncFilter.personId;
+      else if (syncFilter.teamId) syncBody.teamId = syncFilter.teamId;
+      const res = await api.post('/tempo/sync', syncBody);
       toast.success(res.data.message);
       setSyncStats({
         synced: res.data.synced,
@@ -208,12 +227,33 @@ export default function TempoPage() {
           </div>
         )}
 
+        <div className="flex items-center gap-2">
+          <select
+            className="input text-sm w-36"
+            value={syncFilter.teamId}
+            onChange={(e) => setSyncFilter({ teamId: e.target.value, personId: '' })}
+          >
+            <option value="">All Teams</option>
+            {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <select
+            className="input text-sm w-44"
+            value={syncFilter.personId}
+            onChange={(e) => setSyncFilter(prev => ({ ...prev, personId: e.target.value }))}
+          >
+            <option value="">All People</option>
+            {people
+              .filter(p => !syncFilter.teamId || p.teamId === syncFilter.teamId)
+              .map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName}</option>)}
+          </select>
+        </div>
+
         <button
           onClick={handleSync}
           disabled={syncing || !config}
           className="btn-primary text-sm"
         >
-          {syncing ? '⏳ Syncing...' : '🔄 Sync from Tempo'}
+          {syncing ? '⏳ Syncing...' : `🔄 Sync${syncFilter.personId ? ' Person' : syncFilter.teamId ? ' Team' : ' All'}`}
         </button>
 
         <button onClick={loadReport} className="btn-secondary text-sm">

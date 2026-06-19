@@ -12,6 +12,7 @@ export default function PersonDetail() {
   const [absenceTypes, setAbsenceTypes] = useState([]);
   const [schedules, setSchedules] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [syncingTempo, setSyncingTempo] = useState(false);
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [showAbsenceModal, setShowAbsenceModal] = useState(false);
   const [showHoursModal, setShowHoursModal] = useState(false);
@@ -79,6 +80,22 @@ export default function PersonDetail() {
       loadData();
     } catch (err) {
       toast.error('Failed to add absence');
+    }
+  };
+
+  const handleSyncTempo = async () => {
+    setSyncingTempo(true);
+    try {
+      const now = new Date();
+      const from = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+      const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+      const to = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${lastDay}`;
+      const res = await api.post('/tempo/sync', { from, to, personId: id });
+      toast.success(res.data.message || 'Tempo synced');
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Sync failed');
+    } finally {
+      setSyncingTempo(false);
     }
   };
 
@@ -173,6 +190,14 @@ export default function PersonDetail() {
             <span className="text-sm ml-2">• {weeklyHours}h/week</span>
           </p>
         </div>
+        <button
+          onClick={handleSyncTempo}
+          disabled={syncingTempo}
+          className="btn-secondary text-sm"
+          title="Sync this person's Tempo worklogs for the current month"
+        >
+          {syncingTempo ? '⏳ Syncing...' : '🔄 Sync Tempo'}
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

@@ -271,8 +271,34 @@ class TempoService {
    * @param {string} from - Start date (YYYY-MM-DD)
    * @param {string} to - End date (YYYY-MM-DD)
    */
-  async syncWorklogs(from, to) {
-    const worklogs = await this.fetchWorklogs({ from, to });
+  async syncWorklogs(from, to, { personId, teamId } = {}) {
+    // Determine which account IDs to sync
+    let accountIdsToSync = null; // null = sync all
+    if (personId || teamId) {
+      const personWhere = { isActive: true };
+      if (personId) personWhere.id = personId;
+      if (teamId) personWhere.teamId = teamId;
+      const targetPeople = await prisma.person.findMany({
+        where: personWhere,
+        select: { jiraAccountId: true, firstName: true, lastName: true },
+      });
+      accountIdsToSync = targetPeople.map(p => p.jiraAccountId).filter(Boolean);
+      if (accountIdsToSync.length === 0) {
+        return { synced: 0, skipped: 0, unmatched: 0, total: 0, error: 'No Jira account IDs found for selected people. Sync all first to auto-link accounts.' };
+      }
+    }
+
+    // Fetch worklogs — per-user if filtered, otherwise all
+    let worklogs;
+    if (accountIdsToSync) {
+      worklogs = [];
+      for (const accountId of accountIdsToSync) {
+        const userLogs = await this.fetchWorklogs({ from, to, accountId });
+        worklogs.push(...userLogs);
+      }
+    } else {
+      worklogs = await this.fetchWorklogs({ from, to });
+    }
 
     // Log first worklog to understand Tempo API structure
     if (worklogs.length > 0) {

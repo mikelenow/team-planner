@@ -74,9 +74,10 @@ router.delete('/config', requireAdmin, async (req, res) => {
 // ─── Sync ────────────────────────────────────────────────────────────────────
 
 // POST /api/tempo/sync - Fetch worklogs from Tempo
+// body: { from, to, personId?, teamId? }
 router.post('/sync', requireEditor, async (req, res) => {
   try {
-    const { from, to } = req.body;
+    const { from, to, personId, teamId } = req.body;
     if (!from || !to) {
       return res.status(400).json({ error: 'from and to dates are required (YYYY-MM-DD)' });
     }
@@ -86,7 +87,7 @@ router.post('/sync', requireEditor, async (req, res) => {
       return res.status(400).json({ error: 'Tempo integration not configured. Add API token in Settings.' });
     }
 
-    const result = await service.syncWorklogs(from, to);
+    const result = await service.syncWorklogs(from, to, { personId, teamId });
     res.json({
       message: `Synced ${result.synced} worklogs, ${result.skipped || 0} unchanged, ${result.unmatched} unmatched`,
       ...result,
