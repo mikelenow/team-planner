@@ -119,16 +119,18 @@ router.get('/', async (req, res) => {
 
     const scheduleLookup = buildScheduleLookup(schedules);
 
-    // Build tempo worklog lookup: personId|date -> { hours, projects }
+    // Build tempo worklog lookup: personId|date -> { hours, projects: [{key, hours}] }
     const tempoByPersonDate = new Map();
     for (const wl of tempoWorklogs) {
       const key = `${wl.personId}|${format(new Date(wl.date), 'yyyy-MM-dd')}`;
       if (!tempoByPersonDate.has(key)) {
-        tempoByPersonDate.set(key, { hours: 0, projects: new Set() });
+        tempoByPersonDate.set(key, { hours: 0, byProject: new Map() });
       }
       const entry = tempoByPersonDate.get(key);
       entry.hours += wl.timeSpentHours;
-      if (wl.jiraProjectKey) entry.projects.add(wl.jiraProjectKey);
+      if (wl.jiraProjectKey) {
+        entry.byProject.set(wl.jiraProjectKey, (entry.byProject.get(wl.jiraProjectKey) || 0) + wl.timeSpentHours);
+      }
     }
 
     // Calculate utilization for each person
@@ -174,7 +176,7 @@ router.get('/', async (req, res) => {
         const dateStr = format(day, 'yyyy-MM-dd');
         const tempoData = tempoByPersonDate.get(`${person.id}|${dateStr}`);
         const actualHours = tempoData?.hours || 0;
-        const actualProjects = tempoData ? [...tempoData.projects] : [];
+        const actualByProject = tempoData ? Array.from(tempoData.byProject.entries()).map(([proj, hrs]) => ({ project: proj, hours: Math.round(hrs * 10) / 10 })) : [];
         totalActualHours += actualHours;
 
         return {
@@ -182,7 +184,7 @@ router.get('/', async (req, res) => {
           available: availableHours,
           allocated: allocatedHours,
           actual: Math.round(actualHours * 10) / 10,
-          actualProjects,
+          actualByProject,
           absence: absenceHours,
           absenceType: absence?.absenceType?.name || null,
           holiday: false,

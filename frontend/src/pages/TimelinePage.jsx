@@ -500,10 +500,25 @@ export default function TimelinePage() {
                           {dayData.allocationPct > 0 ? `${dayData.allocationPct}%` : ''}
                         </div>
                         {dayData.actual > 0 && (
-                          <div className="text-[10px] text-purple-600 font-medium mt-0.5 leading-none" title={`Tempo: ${dayData.actual}h — ${dayData.actualProjects?.join(', ') || '?'}`}>
-                            {dayData.actual}h
-                            {dayData.actualProjects?.length > 0 && (
-                              <span className="text-purple-400 ml-0.5">{dayData.actualProjects.join(',')}</span>
+                          <div
+                            className="mt-0.5"
+                            title={`Tempo: ${dayData.actual}h\n${(dayData.actualByProject || []).map(p => `  ${p.project}: ${p.hours}h`).join('\n')}`}
+                          >
+                            <div className="text-[10px] text-purple-600 font-medium leading-none text-center">{dayData.actual}h</div>
+                            {(dayData.actualByProject?.length || 0) > 0 && (
+                              <div className="flex h-1 rounded-full overflow-hidden mt-0.5 mx-0.5">
+                                {dayData.actualByProject.map((p, i) => (
+                                  <div
+                                    key={i}
+                                    className="h-full"
+                                    style={{
+                                      width: `${(p.hours / dayData.actual) * 100}%`,
+                                      backgroundColor: ['#3B82F6','#10B981','#F59E0B','#8B5CF6','#EF4444','#EC4899','#06B6D4','#84CC16'][i % 8],
+                                    }}
+                                    title={`${p.project}: ${p.hours}h`}
+                                  />
+                                ))}
+                              </div>
                             )}
                           </div>
                         )}
