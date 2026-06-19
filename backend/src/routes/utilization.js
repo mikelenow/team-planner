@@ -163,12 +163,12 @@ router.get('/', async (req, res) => {
         totalAvailableHours += availableHours;
         totalAllocatedHours += allocatedHours;
         totalAbsenceHours += absenceHours;
-        totalActualHours += actualHours;
 
         const utilization = availableHours > 0 ? (allocatedHours / availableHours) * 100 : 0;
 
         const dateStr = format(day, 'yyyy-MM-dd');
         const actualHours = tempoByPersonDate.get(`${person.id}|${dateStr}`) || 0;
+        totalActualHours += actualHours;
 
         return {
           date: dateStr,
