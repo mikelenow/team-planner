@@ -67,6 +67,17 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteAbsenceType = async (type) => {
+    if (!confirm(`Delete absence type "${type.name}"?`)) return;
+    try {
+      await api.delete(`/absences/types/${type.id}`);
+      toast.success('Absence type deleted');
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete absence type');
+    }
+  };
+
   const generateHolidays = async () => {
     try {
       const res = await api.post(`/holidays/generate?year=${currentYear}`);
@@ -118,6 +129,10 @@ export default function SettingsPage() {
                   <div className="w-3 h-3 rounded-full" style={{ backgroundColor: type.color }}></div>
                   <span className="font-medium text-sm">{type.name}</span>
                   {!type.isPaid && <span className="text-xs text-gray-500">(unpaid)</span>}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-gray-500">{type._count?.absences || 0} absences</span>
+                  <button onClick={() => handleDeleteAbsenceType(type)} className="text-xs text-red-500 hover:text-red-700">Delete</button>
                 </div>
               </div>
             ))}

@@ -32,7 +32,10 @@ router.get('/', async (req, res) => {
 // GET /api/absences/types
 router.get('/types', async (req, res) => {
   try {
-    const types = await prisma.absenceType.findMany({ orderBy: { name: 'asc' } });
+    const types = await prisma.absenceType.findMany({
+      include: { _count: { select: { absences: true } } },
+      orderBy: { name: 'asc' },
+    });
     res.json(types);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -44,6 +47,24 @@ router.post('/types', requireEditor, async (req, res) => {
   try {
     const type = await prisma.absenceType.create({ data: req.body });
     res.status(201).json(type);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /api/absences/types/:id
+router.delete('/types/:id', requireEditor, async (req, res) => {
+  try {
+    const inUse = await prisma.absence.count({
+      where: { absenceTypeId: req.params.id },
+    });
+    if (inUse > 0) {
+      return res.status(409).json({
+        error: `Cannot delete: ${inUse} absence${inUse === 1 ? '' : 's'} still use this type.`,
+      });
+    }
+    await prisma.absenceType.delete({ where: { id: req.params.id } });
+    res.status(204).send();
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

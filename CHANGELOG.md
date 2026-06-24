@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ---
 
+## 2026-06-24
+
+### Added
+
+- **Delete absence types**: The Absence Types card in Settings now shows each type's usage count and a Delete button (mirroring the Roles card). New `DELETE /api/absences/types/:id` endpoint (editor-only) refuses deletion with a 409 when any absence still references the type, so historical data can't be orphaned. The `GET /api/absences/types` response now includes an `_count.absences` for each type.
+
+---
+
 ## 2026-06-18
 
 ### Added
