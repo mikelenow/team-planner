@@ -353,15 +353,17 @@ class TempoService {
     // Pre-fetch existing worklogs for this period to detect changes
     const existingWorklogs = await prisma.tempoWorklog.findMany({
       where: { date: { gte: new Date(from), lte: new Date(to) } },
-      select: { tempoWorklogId: true, timeSpentHours: true, personId: true, projectId: true, date: true, jiraIssueKey: true, description: true },
+      select: { tempoWorklogId: true, jiraAccountId: true, timeSpentHours: true, personId: true, projectId: true, date: true, jiraIssueKey: true, description: true },
     });
     const existingByTempoId = new Map(existingWorklogs.map(w => [w.tempoWorklogId, w]));
 
-    // Upsert worklogs — skip unchanged, batch person updates
-    let synced = 0;
+    // Match worklogs and collect the ones that need writing — skip unchanged ones.
+    // The DB writes are executed afterwards in parallel batches (one round-trip per
+    // worklog, run serially, is the main reason a large sync times out the gateway).
     let skipped = 0;
     let unmatched = 0;
     const personUpdates = new Map(); // jiraAccountId -> personId (for batch update)
+    const toWrite = []; // worklog payloads to upsert
 
     for (const wl of worklogs) {
       const tempoWorklogId = wl.tempoWorklogId || wl.id;
@@ -420,56 +422,56 @@ class TempoService {
         continue;
       }
 
-      await prisma.tempoWorklog.upsert({
-        where: { tempoWorklogId },
-        update: {
-          jiraAccountId,
-          jiraDisplayName,
-          jiraIssueId,
-          jiraProjectKey,
-          jiraIssueKey,
-          description,
-          date: dateObj,
-          timeSpentHours,
-          personId,
-          projectId,
-        },
-        create: {
-          tempoWorklogId,
-          jiraAccountId,
-          jiraDisplayName,
-          jiraIssueId,
-          jiraProjectKey,
-          jiraIssueKey,
-          description,
-          date: dateObj,
-          timeSpentHours,
-          personId,
-          projectId,
-        },
+      toWrite.push({
+        tempoWorklogId,
+        jiraAccountId,
+        jiraDisplayName,
+        jiraIssueId,
+        jiraProjectKey,
+        jiraIssueKey,
+        description,
+        date: dateObj,
+        timeSpentHours,
+        personId,
+        projectId,
       });
-
-      synced++;
     }
 
-    // Batch update person jiraAccountIds
-    for (const [accountId, personId] of personUpdates) {
-      await prisma.person.update({
-        where: { id: personId },
-        data: { jiraAccountId: accountId },
-      }).catch(() => {});
+    // Execute the upserts in parallel batches to keep the request well under the gateway timeout.
+    const BATCH = 25;
+    for (let i = 0; i < toWrite.length; i += BATCH) {
+      await Promise.all(toWrite.slice(i, i + BATCH).map(({ tempoWorklogId, ...data }) =>
+        prisma.tempoWorklog.upsert({
+          where: { tempoWorklogId },
+          update: data,
+          create: { tempoWorklogId, ...data },
+        })
+      ));
     }
+    const synced = toWrite.length;
+
+    // Batch update person jiraAccountIds (small list — only newly linked accounts).
+    await Promise.all(Array.from(personUpdates, ([accountId, personId]) =>
+      prisma.person.update({ where: { id: personId }, data: { jiraAccountId: accountId } }).catch(() => {})
+    ));
 
     // Reconcile deletions: remove local worklogs in this period that no longer exist in
     // Tempo (deleted or moved out of range). fetchWorklogs throws on API errors, so an
     // empty fetch genuinely means "no worklogs here", not a failed request.
-    // When the sync is scoped to specific people/teams, only reconcile those accounts so
-    // we never touch worklogs the current run didn't fetch.
+    // We already have the period's existing rows in memory, so compute the small set of
+    // ids that vanished and delete those by id (cheap) rather than a giant NOT IN list.
+    // When scoped to specific people/teams, only reconcile those accounts so we never
+    // touch worklogs the current run didn't fetch.
     const fetchedIds = new Set(worklogs.map(wl => wl.tempoWorklogId || wl.id).filter(Boolean));
-    const deleteWhere = { date: { gte: new Date(from), lte: new Date(to) } };
-    if (accountIdsToSync) deleteWhere.jiraAccountId = { in: accountIdsToSync };
-    if (fetchedIds.size > 0) deleteWhere.tempoWorklogId = { notIn: [...fetchedIds] };
-    const { count: deleted } = await prisma.tempoWorklog.deleteMany({ where: deleteWhere });
+    const scopedAccounts = accountIdsToSync ? new Set(accountIdsToSync) : null;
+    const idsToDelete = existingWorklogs
+      .filter(w => !fetchedIds.has(w.tempoWorklogId))
+      .filter(w => !scopedAccounts || scopedAccounts.has(w.jiraAccountId))
+      .map(w => w.tempoWorklogId);
+    let deleted = 0;
+    if (idsToDelete.length > 0) {
+      ({ count: deleted } = await prisma.tempoWorklog.deleteMany({ where: { tempoWorklogId: { in: idsToDelete } } }));
+    }
 
     // Update last sync time
     await prisma.tempoConfig.updateMany({
