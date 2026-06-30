@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import api from '../utils/api';
 import toast from 'react-hot-toast';
-import { format, addWeeks, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday } from 'date-fns';
+import { format, addWeeks, addDays, parseISO, startOfWeek, endOfWeek, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isToday } from 'date-fns';
 import { getUtilizationBgColor } from '../utils/helpers';
 import { useAuth } from '../context/AuthContext';
 import Modal from '../components/Modal';
@@ -139,7 +139,11 @@ export default function TimelinePage() {
         const end = format(new Date(a.endDate), 'yyyy-MM-dd');
         return dateStr >= start && dateStr <= end;
       })
-      .map(a => ({ id: a.id, projectId: a.project.id, projectName: a.project.name, percentage: a.percentage, startDate: a.startDate, endDate: a.endDate }));
+      .map(a => ({
+        id: a.id, projectId: a.project.id, projectName: a.project.name, percentage: a.percentage, startDate: a.startDate, endDate: a.endDate,
+        // Snapshot of the record as loaded, so save can detect a project change and split safely
+        origProjectId: a.project.id, origPercentage: a.percentage, origStartDate: a.startDate, origEndDate: a.endDate,
+      }));
 
     setEditingCell({
       personId: personItem.person.id,
@@ -282,15 +286,53 @@ export default function TimelinePage() {
 
   const handleSaveCellAllocations = async () => {
     try {
-      const allocsToSave = cellAllocations
-        .filter(alloc => alloc.projectId && alloc.percentage)
-        .map(alloc => ({
-          id: alloc.id || undefined,
-          projectId: alloc.projectId,
-          percentage: parseFloat(alloc.percentage),
-          startDate: alloc.startDate || editingCell.date,
-          endDate: alloc.endDate || editingCell.date,
-        }));
+      const day = (s) => (s || '').split('T')[0];
+      const shift = (s, n) => format(addDays(parseISO(day(s)), n), 'yyyy-MM-dd');
+
+      const allocsToSave = [];
+      for (const alloc of cellAllocations) {
+        if (!alloc.projectId || !alloc.percentage) continue;
+        const pct = parseFloat(alloc.percentage);
+        const newStart = day(alloc.startDate) || editingCell.date;
+        const newEnd = day(alloc.endDate) || editingCell.date;
+
+        const projectChanged = alloc.id && alloc.origProjectId && alloc.projectId !== alloc.origProjectId;
+        if (!projectChanged) {
+          allocsToSave.push({ id: alloc.id || undefined, projectId: alloc.projectId, percentage: pct, startDate: newStart, endDate: newEnd });
+          continue;
+        }
+
+        // The project was reassigned on an existing record. The cell modal is day-scoped:
+        // if the date range wasn't manually edited, scope the new project to the clicked day
+        // only and keep the old project on the surrounding days (split, don't overwrite).
+        const oStart = day(alloc.origStartDate);
+        const oEnd = day(alloc.origEndDate);
+        const datesEdited = newStart !== oStart || newEnd !== oEnd;
+        const effStart = datesEdited ? newStart : editingCell.date;
+        const effEnd = datesEdited ? newEnd : editingCell.date;
+
+        // Leftover segments of the original range NOT covered by the new project's range.
+        const min = (a, b) => (a < b ? a : b);
+        const max = (a, b) => (a > b ? a : b);
+        const leftovers = [];
+        const leftEnd = min(oEnd, shift(effStart, -1));
+        if (oStart <= leftEnd) leftovers.push({ start: oStart, end: leftEnd });
+        const rightStart = max(oStart, shift(effEnd, 1));
+        if (rightStart <= oEnd) leftovers.push({ start: rightStart, end: oEnd });
+
+        if (leftovers.length === 0) {
+          // New range fully covers the original — a genuine full reassignment, update in place.
+          allocsToSave.push({ id: alloc.id, projectId: alloc.projectId, percentage: pct, startDate: effStart, endDate: effEnd });
+        } else {
+          // Keep the old project on the leftovers (reuse the original id for the first one),
+          // and add a new record for the reassigned days.
+          allocsToSave.push({ id: alloc.id, projectId: alloc.origProjectId, percentage: alloc.origPercentage, startDate: leftovers[0].start, endDate: leftovers[0].end });
+          for (let i = 1; i < leftovers.length; i++) {
+            allocsToSave.push({ projectId: alloc.origProjectId, percentage: alloc.origPercentage, startDate: leftovers[i].start, endDate: leftovers[i].end });
+          }
+          allocsToSave.push({ projectId: alloc.projectId, percentage: pct, startDate: effStart, endDate: effEnd });
+        }
+      }
 
       const absence = cellAbsence.absenceTypeId ? {
         absenceTypeId: cellAbsence.absenceTypeId,
