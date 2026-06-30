@@ -89,7 +89,7 @@ router.post('/sync', requireEditor, async (req, res) => {
 
     const result = await service.syncWorklogs(from, to, { personId, teamId });
     res.json({
-      message: `Synced ${result.synced} worklogs, ${result.skipped || 0} unchanged, ${result.unmatched} unmatched`,
+      message: `Synced ${result.synced} worklogs, ${result.skipped || 0} unchanged, ${result.deleted || 0} removed, ${result.unmatched} unmatched`,
       ...result,
     });
   } catch (err) {

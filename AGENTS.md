@@ -3,7 +3,8 @@
 ## Project: Team Planner
 
 Resource utilization planning webapp for developers, project managers, and other roles.
-
+Dont bullshit, if there is something that you dont know, be honest
+dont use emojis or other marketing terminology, be straight
 ---
 
 ## ⚠️ Critical Rules

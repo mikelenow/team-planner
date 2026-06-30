@@ -353,7 +353,7 @@ class TempoService {
     // Pre-fetch existing worklogs for this period to detect changes
     const existingWorklogs = await prisma.tempoWorklog.findMany({
       where: { date: { gte: new Date(from), lte: new Date(to) } },
-      select: { tempoWorklogId: true, timeSpentHours: true, personId: true, projectId: true },
+      select: { tempoWorklogId: true, timeSpentHours: true, personId: true, projectId: true, date: true, jiraIssueKey: true, description: true },
     });
     const existingByTempoId = new Map(existingWorklogs.map(w => [w.tempoWorklogId, w]));
 
@@ -370,8 +370,14 @@ class TempoService {
       const jiraIssueKey = wl.issue?.key || jiraIssueKeys.get(jiraIssueId) || wl.issueKey || '';
       const jiraProjectKey = jiraIssueKey.split('-')[0] || '';
       const date = wl.startDate || wl.dateStarted?.split('T')[0] || '';
+      const dateObj = new Date(date);
       const timeSpentHours = (wl.timeSpentSeconds || wl.timeSpent || 0) / 3600;
       const description = wl.description || '';
+
+      // Skip malformed worklogs with no usable date (would corrupt the date column).
+      if (isNaN(dateObj.getTime())) {
+        continue;
+      }
 
       // Get Jira user info for this worklog's author
       const jiraUser = jiraUsers.get(jiraAccountId);
@@ -400,10 +406,16 @@ class TempoService {
         unmatched++;
       }
 
-      // Skip if worklog exists and nothing changed
+      // Skip if worklog exists and nothing relevant changed. Compare hours (with an
+      // epsilon, since they're floats), person/project links, and the fields that a Tempo
+      // edit can move: date, issue, and description.
       const existing = existingByTempoId.get(tempoWorklogId);
-      if (existing && existing.timeSpentHours === timeSpentHours
-          && existing.personId === personId && existing.projectId === projectId) {
+      if (existing
+          && Math.abs(existing.timeSpentHours - timeSpentHours) < 0.0001
+          && existing.personId === personId && existing.projectId === projectId
+          && existing.date.getTime() === dateObj.getTime()
+          && (existing.jiraIssueKey || '') === jiraIssueKey
+          && (existing.description || '') === description) {
         skipped++;
         continue;
       }
@@ -417,7 +429,7 @@ class TempoService {
           jiraProjectKey,
           jiraIssueKey,
           description,
-          date: new Date(date),
+          date: dateObj,
           timeSpentHours,
           personId,
           projectId,
@@ -430,7 +442,7 @@ class TempoService {
           jiraProjectKey,
           jiraIssueKey,
           description,
-          date: new Date(date),
+          date: dateObj,
           timeSpentHours,
           personId,
           projectId,
@@ -448,6 +460,17 @@ class TempoService {
       }).catch(() => {});
     }
 
+    // Reconcile deletions: remove local worklogs in this period that no longer exist in
+    // Tempo (deleted or moved out of range). fetchWorklogs throws on API errors, so an
+    // empty fetch genuinely means "no worklogs here", not a failed request.
+    // When the sync is scoped to specific people/teams, only reconcile those accounts so
+    // we never touch worklogs the current run didn't fetch.
+    const fetchedIds = new Set(worklogs.map(wl => wl.tempoWorklogId || wl.id).filter(Boolean));
+    const deleteWhere = { date: { gte: new Date(from), lte: new Date(to) } };
+    if (accountIdsToSync) deleteWhere.jiraAccountId = { in: accountIdsToSync };
+    if (fetchedIds.size > 0) deleteWhere.tempoWorklogId = { notIn: [...fetchedIds] };
+    const { count: deleted } = await prisma.tempoWorklog.deleteMany({ where: deleteWhere });
+
     // Update last sync time
     await prisma.tempoConfig.updateMany({
       where: { isActive: true },
@@ -457,6 +480,7 @@ class TempoService {
     return {
       synced,
       skipped,
+      deleted,
       unmatched,
       total: worklogs.length,
       jiraUsersResolved: jiraUsers.size,
@@ -659,6 +683,21 @@ class TempoService {
     });
     const scheduleLookup = buildScheduleLookup(schedules);
 
+    const periodStart = new Date(from);
+    const periodEnd = new Date(to);
+
+    // Sum a person's working hours over an inclusive [start, end] window, skipping holidays
+    // and honouring per-week schedule overrides (0 on weekends/off days).
+    const workingHoursBetween = (person, start, end) => {
+      if (end < start) return 0;
+      let hours = 0;
+      for (const day of eachDayOfInterval({ start, end })) {
+        if (holidayDates.has(format(day, 'yyyy-MM-dd'))) continue;
+        hours += getDailyHours(person, day, scheduleLookup);
+      }
+      return hours;
+    };
+
     const report = [];
 
     for (const person of people) {
@@ -693,7 +732,11 @@ class TempoService {
           });
         }
         const entry = projectMap.get(key);
-        entry.plannedHours += (alloc.percentage / 100) * totalWorkingHours;
+        // Only count working hours within the allocation's overlap with the report period —
+        // an allocation shorter than the window must not be credited the whole period.
+        const start = new Date(alloc.startDate) > periodStart ? new Date(alloc.startDate) : periodStart;
+        const end = new Date(alloc.endDate) < periodEnd ? new Date(alloc.endDate) : periodEnd;
+        entry.plannedHours += (alloc.percentage / 100) * workingHoursBetween(person, start, end);
       });
 
       // Actual hours from worklogs
