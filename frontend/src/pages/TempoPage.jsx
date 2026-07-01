@@ -83,30 +83,59 @@ export default function TempoPage() {
       toast.error('Select a date range first');
       return;
     }
+
+    // The sync runs in the background on the server; poll its status until it finishes
+    // so a long-running sync can't hit the gateway timeout.
+    const finishSync = (job) => {
+      if (job.status === 'error') {
+        toast.error(job.message || 'Sync failed');
+      } else {
+        toast.success(job.message || 'Sync complete');
+        const r = job.result || {};
+        setSyncStats({
+          synced: r.synced,
+          unmatched: r.unmatched,
+          total: r.total,
+          jiraUsersResolved: r.jiraUsersResolved,
+          jiraIssueKeysResolved: r.jiraIssueKeysResolved,
+          uniqueIssueIds: r.uniqueIssueIds,
+          jiraErrors: r.jiraErrors,
+        });
+        if (r.sampleRaw) setSampleRaw(r.sampleRaw);
+        loadReport();
+      }
+      setSyncing(false);
+    };
+
+    const poll = async () => {
+      try {
+        const { data: job } = await api.get('/tempo/sync/status');
+        if (job.status === 'running') {
+          setTimeout(poll, 2000);
+        } else {
+          finishSync(job);
+        }
+      } catch (err) {
+        toast.error('Lost connection to sync');
+        setSyncing(false);
+      }
+    };
+
     setSyncing(true);
     try {
       const syncBody = { from, to };
       if (syncFilter.personId) syncBody.personId = syncFilter.personId;
       else if (syncFilter.teamId) syncBody.teamId = syncFilter.teamId;
-      const res = await api.post('/tempo/sync', syncBody);
-      toast.success(res.data.message);
-      setSyncStats({
-        synced: res.data.synced,
-        unmatched: res.data.unmatched,
-        total: res.data.total,
-        jiraUsersResolved: res.data.jiraUsersResolved,
-        jiraIssueKeysResolved: res.data.jiraIssueKeysResolved,
-        uniqueIssueIds: res.data.uniqueIssueIds,
-        jiraErrors: res.data.jiraErrors,
-      });
-      if (res.data.sampleRaw) {
-        setSampleRaw(res.data.sampleRaw);
-      }
-      loadReport();
+      await api.post('/tempo/sync', syncBody);
+      poll();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Sync failed');
-    } finally {
-      setSyncing(false);
+      // A sync already in progress (409) — just follow it; otherwise surface the error.
+      if (err.response?.status === 409) {
+        poll();
+      } else {
+        toast.error(err.response?.data?.error || 'Sync failed');
+        setSyncing(false);
+      }
     }
   };
 

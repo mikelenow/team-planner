@@ -73,7 +73,16 @@ router.delete('/config', requireAdmin, async (req, res) => {
 
 // ─── Sync ────────────────────────────────────────────────────────────────────
 
-// POST /api/tempo/sync - Fetch worklogs from Tempo
+// In-memory background sync job. A sync fetches from Tempo + Jira and can run longer
+// than the gateway timeout, so we run it detached and let the client poll for status.
+// Single backend instance => module-level state is fine; it resets on process restart.
+let syncJob = { status: 'idle', startedAt: null, finishedAt: null, params: null, result: null, error: null, message: null };
+
+function buildSyncMessage(result) {
+  return `Synced ${result.synced} worklogs, ${result.skipped || 0} unchanged, ${result.deleted || 0} removed, ${result.unmatched} unmatched`;
+}
+
+// POST /api/tempo/sync - Kick off a background worklog sync. Returns 202 immediately.
 // body: { from, to, personId?, teamId? }
 router.post('/sync', requireEditor, async (req, res) => {
   try {
@@ -82,19 +91,44 @@ router.post('/sync', requireEditor, async (req, res) => {
       return res.status(400).json({ error: 'from and to dates are required (YYYY-MM-DD)' });
     }
 
+    if (syncJob.status === 'running') {
+      return res.status(409).json({ error: 'A sync is already running', job: syncJob });
+    }
+
     const service = await TempoService.getConfig();
     if (!service) {
       return res.status(400).json({ error: 'Tempo integration not configured. Add API token in Settings.' });
     }
 
-    const result = await service.syncWorklogs(from, to, { personId, teamId });
-    res.json({
-      message: `Synced ${result.synced} worklogs, ${result.skipped || 0} unchanged, ${result.deleted || 0} removed, ${result.unmatched} unmatched`,
-      ...result,
-    });
+    syncJob = {
+      status: 'running',
+      startedAt: new Date().toISOString(),
+      finishedAt: null,
+      params: { from, to, personId: personId || null, teamId: teamId || null },
+      result: null,
+      error: null,
+      message: 'Sync running…',
+    };
+
+    // Run detached — do NOT await, so the request returns immediately and can't time out.
+    service.syncWorklogs(from, to, { personId, teamId })
+      .then((result) => {
+        syncJob = { ...syncJob, status: 'done', finishedAt: new Date().toISOString(), result, message: buildSyncMessage(result) };
+      })
+      .catch((err) => {
+        console.error('Tempo sync failed:', err);
+        syncJob = { ...syncJob, status: 'error', finishedAt: new Date().toISOString(), error: err.message, message: `Sync failed: ${err.message}` };
+      });
+
+    res.status(202).json({ status: 'running', message: 'Sync started', job: syncJob });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// GET /api/tempo/sync/status - Poll the background sync job state.
+router.get('/sync/status', requireEditor, (req, res) => {
+  res.json(syncJob);
 });
 
 // POST /api/tempo/rematch - Re-match existing worklogs to people/projects
